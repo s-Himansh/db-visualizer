@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Visualizer</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2312161b'/%3E%3Cpath d='M3 4.5h10M3 8h10M3 11.5h10M6.5 4v8' stroke='%233fb8a5' stroke-width='1.4' fill='none'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20261029a">
+    <link rel="stylesheet" href="/static/css/theme.css?v=20261029a">
+    <link rel="stylesheet" href="/static/lib/codemirror/codemirror.min.css">
+    <link rel="stylesheet" href="/static/lib/codemirror/theme/monokai.min.css">
+    <link rel="stylesheet" href="/static/lib/codemirror/addon/hint/show-hint.min.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <!-- Sidebar Header with Connections Button -->
+            <div class="sidebar-header">
+                <h2>Tables</h2>
+                <button class="btn btn-primary btn-sm" id="manage-connections-btn" title="Manage Connections">
+                    Connections
+                </button>
+            </div>
+
+            <!-- Database Browser Section -->
+            <div class="database-browser-section">
+                <div class="tables-header" id="current-database-header">
+                    <span id="current-database-name">No database selected</span>
+                    <button class="btn btn-sm" id="open-map-btn" title="See how the tables relate" disabled>Map</button>
+                </div>
+                <div class="tables-content" id="tables-content">
+                    <!-- Tables will be loaded here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Resize Handle -->
+        <div class="sidebar-resize-handle" id="sidebar-resize-handle"></div>
+
+        <!-- Main content area -->
+        <div class="main-content">
+            <!-- Toolbar -->
+            <div class="toolbar">
+                <div class="toolbar-left">
+                    <button class="btn btn-sm" id="refresh-btn" title="Refresh">
+                        Refresh
+                    </button>
+                    <div class="connection-badge" id="active-conn-badge" style="display: none;">
+                        <span class="connection-dot"></span>
+                        <span class="connection-name" id="active-conn-name">Not Connected</span>
+                    </div>
+                    <span class="connection-status" id="connection-status">Not Connected</span>
+                </div>
+                <div class="toolbar-right">
+                    <button class="btn btn-sm" id="palette-btn" title="Jump to a table, connection or action">Jump to <kbd>⌘K</kbd></button>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs-container">
+                <div class="tabs-header" id="tabs-header">
+                    <!-- Tabs will be dynamically inserted here -->
+                </div>
+                <button class="btn btn-sm tab-new" id="new-query-tab-btn" title="New query tab">New query</button>
+            </div>
+
+            <!-- Main content area for tabs -->
+            <div class="main-content" id="main-content">
+                <!-- Tab content areas will be dynamically inserted here -->
+            </div>
+
+            <!-- Status bar -->
+            <div class="status-bar">
+                <div class="status-left">
+                    <span id="status-message">Ready</span>
+                </div>
+                <div class="status-right">
+                    <span id="execution-time"></span>
+                    <span id="row-count"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connection Modal -->
+    <div class="modal" id="connection-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="connection-modal-title">New connection</h3>
+                <span class="modal-close" id="connection-modal-close" role="button" aria-label="Close" tabindex="0">×</span>
+            </div>
+            <div class="modal-body">
+                <form id="connection-form">
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" name="name" class="form-control" placeholder="My Database" required>
+                    </div>
+
+                    <div class="form-group" id="environment-group">
+                        <label>Environment</label>
+                        <select name="environment" id="environment-select" class="form-control">
+                            <option value="">Not set</option>
+                            <option value="local">Local</option>
+                            <option value="development">Development</option>
+                            <option value="staging">Staging</option>
+                            <option value="production">Production</option>
+                        </select>
+                        <p class="form-hint" id="environment-hint" style="display: none;">Production connections start read-only. Untick it below if you need to change data.</p>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Type</label>
+                        <select name="type" class="form-control" required>
+                            <option value="">Select database type</option>
+                            <option value="sqlite">SQLite</option>
+                            <option value="postgresql">PostgreSQL</option>
+                            <option value="mysql">MySQL</option>
+                            <option value="sqlserver">SQL Server</option>
+                            <option value="oracle">Oracle</option>
+                            <option value="mongodb">MongoDB</option>
+                            <option value="redis">Redis</option>
+                            <option value="cassandra">Cassandra</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" id="host-group">
+                        <label>Host</label>
+                        <input type="text" name="host" class="form-control" placeholder="localhost">
+                    </div>
+
+                    <div class="form-group" id="port-group">
+                        <label>Port</label>
+                        <input type="number" name="port" class="form-control" placeholder="5432">
+                    </div>
+
+                    <div class="form-group" id="connection-url-group" style="display: none;">
+                        <label>Connection URL</label>
+                        <input type="text" name="connection_url" class="form-control" placeholder="mongodb://username:password@host:port/database?authSource=admin">
+                    </div>
+
+                    <div class="form-group" id="database-group">
+                        <label>Database / Path</label>
+                        <input type="text" name="database" class="form-control" placeholder="database name or file path">
+                    </div>
+
+                    <div class="form-group" id="username-group">
+                        <label>Username</label>
+                        <input type="text" name="username" class="form-control" placeholder="username">
+                    </div>
+
+                    <div class="form-group" id="password-group">
+                        <label>Password</label>
+                        <input type="password" name="password" class="form-control" placeholder="password">
+                    </div>
+
+                    <div class="form-group" id="readonly-group">
+                        <label class="check-row">
+                            <input type="checkbox" name="read_only" id="read-only-checkbox">
+                            <span>Read-only: block inserts, updates, deletes and schema changes</span>
+                        </label>
+                    </div>
+
+                    <div class="form-group" id="ssh-toggle-group">
+                        <label class="check-row">
+                            <input type="checkbox" name="ssh_enabled" id="ssh-enabled-checkbox">
+                            <span>Connect through an SSH tunnel</span>
+                        </label>
+                    </div>
+
+                    <div id="ssh-fields" class="ssh-fields" style="display: none;">
+                        <div class="form-row">
+                            <div class="form-group grow">
+                                <label>SSH server</label>
+                                <input type="text" name="ssh_host" class="form-control" placeholder="bastion.example.com" autocomplete="off">
+                            </div>
+                            <div class="form-group narrow">
+                                <label>Port</label>
+                                <input type="number" name="ssh_port" class="form-control" placeholder="22">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>SSH user</label>
+                            <input type="text" name="ssh_user" class="form-control" placeholder="your login on the SSH server" autocomplete="off">
+                        </div>
+                        <div class="form-group">
+                            <label>Sign in with</label>
+                            <select name="ssh_auth" id="ssh-auth-select" class="form-control">
+                                <option value="password">Password</option>
+                                <option value="key">Private key file</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="ssh-password-group">
+                            <label>SSH password</label>
+                            <input type="password" name="ssh_password" class="form-control" autocomplete="new-password">
+                        </div>
+                        <div class="form-group" id="ssh-key-group" style="display: none;">
+                            <label>Private key file</label>
+                            <input type="text" name="ssh_key_path" class="form-control" placeholder="~/.ssh/id_ed25519" autocomplete="off">
+                        </div>
+                        <div class="form-group" id="ssh-passphrase-group" style="display: none;">
+                            <label>Key passphrase (leave empty if the key has none)</label>
+                            <input type="password" name="ssh_passphrase" class="form-control" autocomplete="new-password">
+                        </div>
+                        <p class="form-hint">The database host and port above are as seen from the SSH server, for example <code>localhost</code> or a private address.</p>
+                    </div>
+
+                    <div class="form-group" id="ssl-group" style="display: none;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" name="use_ssl" id="use-ssl-checkbox" style="cursor: pointer;">
+                            <span>Use SSL/TLS</span>
+                        </label>
+                    </div>
+
+                    <div class="form-group" id="ssl-certs-group" style="display: none;">
+                        <label>CA Certificate (optional)</label>
+                        <input type="file" name="ca_cert" id="ca-cert-file" class="form-control" accept=".pem,.crt,.cer" style="padding: 4px;">
+                        <small style="color: #999; font-size: 11px;">Root CA certificate for server verification</small>
+                    </div>
+
+                    <div class="form-group" id="ssl-client-cert-group" style="display: none;">
+                        <label>Client Certificate (optional)</label>
+                        <input type="file" name="client_cert" id="client-cert-file" class="form-control" accept=".pem,.crt,.cer" style="padding: 4px;">
+                        <small style="color: #999; font-size: 11px;">Client certificate for mutual TLS</small>
+                    </div>
+
+                    <div class="form-group" id="ssl-client-key-group" style="display: none;">
+                        <label>Client Key (optional)</label>
+                        <input type="file" name="client_key" id="client-key-file" class="form-control" accept=".pem,.key" style="padding: 4px;">
+                        <small style="color: #999; font-size: 11px;">Private key for client certificate</small>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn" id="test-connection-btn">Test connection</button>
+                        <button type="submit" class="btn btn-primary">Save connection</button>
+                        <button type="button" class="btn" id="cancel-connection-btn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Assistant settings -->
+    <div class="modal" id="ai-settings-modal">
+        <div class="modal-content modal-medium">
+            <div class="modal-header">
+                <h3>SQL assistant</h3>
+                <span class="modal-close" id="ai-settings-close" role="button" aria-label="Close" tabindex="0">×</span>
+            </div>
+            <div class="modal-body">
+                <p class="ai-lede">Describe what you want in plain English and Claude writes the SQL into your editor. It never runs it: you read it, then press Run.</p>
+                <div class="ai-disclosure">
+                    <strong>What is sent to the Anthropic API when you use it</strong>
+                    <ul>
+                        <li>the type of database (for example MySQL)</li>
+                        <li>the <em>names</em> of your tables and columns, and the foreign keys between them</li>
+                        <li>the text you type</li>
+                    </ul>
+                    <strong>What is never sent</strong>
+                    <ul>
+                        <li>row data, query results, passwords, hosts or file paths</li>
+                    </ul>
+                    <p>Use <em>Show what's sent</em> in the Ask panel to see the exact text before anything is sent.</p>
+                </div>
+                <div class="form-group">
+                    <label>Anthropic API key</label>
+                    <input type="password" id="ai-key" class="form-control" autocomplete="new-password" spellcheck="false">
+                    <p class="form-hint">Stored encrypted on this computer. Create one in the Anthropic Console. Using it is billed to your Anthropic account.</p>
+                    <p class="form-hint" id="ai-env-note" style="display: none;">No key is saved, so the <code>ANTHROPIC_API_KEY</code> from your environment will be used.</p>
+                </div>
+                <label class="check-row"><input type="checkbox" id="ai-consent"><span>I understand what is sent and that it leaves this computer</span></label>
+                <div class="ai-error" id="ai-error" role="alert"></div>
+                <div class="form-actions">
+                    <span class="ai-state" id="ai-state"></span>
+                    <button type="button" class="btn" id="ai-remove-key" style="display: none;">Remove saved key</button>
+                    <button type="button" class="btn" id="ai-turn-off" style="display: none;">Turn off</button>
+                    <button type="button" class="btn btn-primary" id="ai-save">Turn on</button>
+                    <button type="button" class="btn" id="ai-cancel">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connections Manager Modal -->
+    <div class="modal" id="connections-manager-modal">
+        <div class="modal-content modal-medium">
+            <div class="modal-header">
+                <h3>Connections</h3>
+                <span class="modal-close" id="connections-manager-close" role="button" aria-label="Close" tabindex="0">×</span>
+            </div>
+            <div class="modal-body">
+                <div class="connections-manager-toolbar">
+                    <button class="btn btn-primary btn-sm" id="new-connection-btn-manager" title="New Connection">
+                        New connection
+                    </button>
+                </div>
+                <div class="connections-list" id="connections-list">
+                    <!-- Connections will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/lib/codemirror/codemirror.min.js"></script>
+    <script src="/static/lib/codemirror/mode/sql/sql.min.js"></script>
+    <script src="/static/lib/codemirror/mode/javascript/javascript.min.js"></script>
+    <script src="/static/lib/codemirror/addon/edit/matchbrackets.min.js"></script>
+    <script src="/static/lib/codemirror/addon/edit/closebrackets.min.js"></script>
+    <script src="/static/lib/codemirror/addon/search/searchcursor.min.js"></script>
+    <script src="/static/lib/codemirror/addon/hint/show-hint.min.js"></script>
+    <script src="/static/lib/codemirror/addon/hint/sql-hint.min.js"></script>
+    <script src="/static/lib/codemirror/addon/hint/anyword-hint.min.js"></script>
+    <script src="/static/lib/codemirror/addon/hint/javascript-hint.min.js"></script>
+
+    <script src="/static/js/ui.js?v=20261029a"></script>
+    <script src="/static/js/insights.js?v=20261029a"></script>
+    <script src="/static/js/assistant.js?v=20261029a"></script>
+    <script src="/static/js/relations.js?v=20261029a"></script>
+    <script src="/static/js/connection.js?v=20261029a"></script>
+    <script src="/static/js/query.js?v=20261029a"></script>
+    <script src="/static/js/tabs.js?v=20261029a"></script>
+    <script src="/static/js/palette.js?v=20261029a"></script>
+    <script src="/static/js/app.js?v=20261029a"></script>
+</body>
+</html>
