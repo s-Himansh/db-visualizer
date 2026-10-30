@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest~=8.0
+pyinstaller~=6.0
+playwright~=1.40  # browser tests only (tests/e2e)

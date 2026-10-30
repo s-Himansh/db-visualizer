@@ -1,0 +1,14 @@
+# Compatible-release pins: bug-fix updates only. Re-run `pytest` before bumping a minor version.
+pywebview~=6.2
+flask~=3.1
+psycopg2-binary~=2.9
+pymysql~=1.2
+pymongo~=4.18
+redis~=7.0
+pymssql~=2.4
+oracledb>=2.0
+cassandra-driver~=3.29
+cryptography>=42
+paramiko>=5.0,<6
+keyring~=25.0
+anthropic>=0.50

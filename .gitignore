@@ -1,0 +1,20 @@
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+*.spec.bak
+.pytest_cache/
+# Legacy in-repo data folder: holds saved credentials and the encryption key. Never commit.
+config/*
+!config/.gitkeep
+.remember/
+
+# generated, not source
+*.spec
+.DS_Store
+# throwaway SSH keys for the tunnel tests: made by tests/ssh_fixture/make_keys.py
+tests/ssh_fixture/id_*
+tests/ssh_fixture/authorized_keys
+# a stray empty file from an early version
+index.htm
