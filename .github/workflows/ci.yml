@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    name: Tests (unit, databases, browser)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      # pywebview is only for the desktop window (it needs GTK/Qt on Linux); the tests drive the web app directly.
+      - name: Install dependencies
+        run: |
+          grep -v '^pywebview' requirements.txt > ci-requirements.txt
+          pip install -r ci-requirements.txt pytest playwright
+          playwright install --with-deps chromium
+      - name: Unit and API tests
+        run: python -m pytest tests --ignore=tests/e2e --ignore=tests/integration -q
+      - name: Create the throwaway SSH test keys
+        run: python tests/ssh_fixture/make_keys.py
+      - name: Start test databases and SSH server
+        run: docker compose -f docker-compose.test.yml up -d --wait mysql postgres mongodb redis cassandra sqlserver oracle sshd
+      - name: Real-database and SSH tests
+        run: python -m pytest tests/integration -q
+      - name: Browser tests
+        run: python -m pytest tests/e2e -q
+      - name: Show database logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.test.yml logs --tail=80
+
+  macos-build:
+    name: Build the macOS app (unsigned)
+    runs-on: macos-latest
+    needs: tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: ./build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DB-Visualizer-macOS-unsigned
+          path: dist/DB Visualizer.app
