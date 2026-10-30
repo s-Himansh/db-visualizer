@@ -26,6 +26,11 @@ class SQLiteConnector(BaseConnector):
     # Backticks, not double quotes: SQLite treats a double-quoted name that matches no column as a
     # string literal, so a typo or hostile column name would silently match nothing instead of failing.
     IDENT_QUOTE = ('`', '`')
+    PLACEHOLDER = '?'
+
+    def _begin_tx(self):
+        if not self.connection.in_transaction:
+            self.connection.execute('BEGIN IMMEDIATE')   # SQLite has no row locks: take the write lock for the batch
     BUCKET_EXPR = 'CAST({x} AS INTEGER)'   # the FLOOR() math function is an optional SQLite build feature
 
     def connect(self) -> bool:
@@ -190,7 +195,7 @@ class SQLiteConnector(BaseConnector):
                 row_count = len(rows)
             else:
                 # For INSERT, UPDATE, DELETE
-                self.connection.commit()
+                self._commit()
                 row_data = []
                 columns = []
                 row_count = cursor.rowcount
@@ -283,7 +288,7 @@ class SQLiteConnector(BaseConnector):
 
             cursor = self.connection.cursor()
             cursor.execute(query, list(data.values()))
-            self.connection.commit()
+            self._commit()
             cursor.close()
 
             return True, f"Row inserted successfully (ID: {cursor.lastrowid})"
@@ -303,17 +308,20 @@ class SQLiteConnector(BaseConnector):
             set_clause = ', '.join([f"{self.q(col)} = ?" for col in data.keys()])
 
             # Build WHERE clause
-            where_clause = ' AND '.join([f"{self.q(col)} = ?" for col in conditions.keys()])
+            where_clause, where_params = self._where(conditions, len(data))
 
             query = f"UPDATE {self.q(table)} SET {set_clause} WHERE {where_clause}"
-            params = list(data.values()) + list(conditions.values())
+            params = list(data.values()) + where_params
 
             cursor = self.connection.cursor()
             cursor.execute(query, params)
-            self.connection.commit()
+            self._commit()
             rows_affected = cursor.rowcount
+            self.last_rowcount = rows_affected
             cursor.close()
 
+            if rows_affected == 0:
+                return False, "Update failed: no row matched. It may have been changed or deleted since you loaded it."
             return True, f"{rows_affected} row(s) updated"
         except Exception as e:
             return False, f"Update failed: {str(e)}"
@@ -327,17 +335,19 @@ class SQLiteConnector(BaseConnector):
         """Delete row(s) from a SQLite table."""
         try:
             # Build WHERE clause
-            where_clause = ' AND '.join([f"{self.q(col)} = ?" for col in conditions.keys()])
+            where_clause, params = self._where(conditions)
 
             query = f"DELETE FROM {self.q(table)} WHERE {where_clause}"
-            params = list(conditions.values())
 
             cursor = self.connection.cursor()
             cursor.execute(query, params)
-            self.connection.commit()
+            self._commit()
             rows_affected = cursor.rowcount
+            self.last_rowcount = rows_affected
             cursor.close()
 
+            if rows_affected == 0:
+                return False, "Delete failed: no row matched. It may already have been deleted."
             return True, f"{rows_affected} row(s) deleted"
         except Exception as e:
             return False, f"Delete failed: {str(e)}"

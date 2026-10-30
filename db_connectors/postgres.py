@@ -67,6 +67,19 @@ class PostgreSQLConnector(BaseConnector):
         cursor.close()
         return rows
 
+    def _begin_tx(self):
+        self.connection.autocommit = False   # a batch is one transaction; normal writes are autocommit
+
+    def _end_tx(self, commit: bool):
+        (self.connection.commit if commit else self.connection.rollback)()
+        self.connection.autocommit = True
+
+    def _lock_rows(self, table, conditions, database):
+        where, params = self._where(conditions)
+        cursor = self.connection.cursor()
+        cursor.execute(f"SELECT 1 FROM {self.q(table)} WHERE {where} FOR UPDATE", params)
+        cursor.close()
+
     def cancel(self) -> bool:
         self.connection.cancel()  # psycopg2: safe to call from another thread
         return True
@@ -287,7 +300,7 @@ class PostgreSQLConnector(BaseConnector):
                 row_count = len(rows)
             else:
                 # For INSERT, UPDATE, DELETE
-                self.connection.commit()
+                self._commit()
                 row_data = []
                 columns = []
                 row_count = cursor.rowcount
@@ -303,7 +316,7 @@ class PostgreSQLConnector(BaseConnector):
                 'error': None
             }
         except Exception as e:
-            self.connection.rollback()
+            self._rollback()
             execution_time = time.time() - start_time
             return {
                 'columns': [],
@@ -438,12 +451,12 @@ class PostgreSQLConnector(BaseConnector):
             query = f'INSERT INTO {self.q(table)} ({columns}) VALUES ({placeholders_str})'
 
             cursor.execute(query, list(data.values()))
-            self.connection.commit()
+            self._commit()
             cursor.close()
 
             return True, "Row inserted successfully"
         except Exception as e:
-            self.connection.rollback()
+            self._rollback()
             return False, f"Insert failed: {str(e)}"
 
     def update_row(
@@ -528,8 +541,9 @@ class PostgreSQLConnector(BaseConnector):
 
 
             cursor.execute(query, params)
-            self.connection.commit()
+            self._commit()
             rows_affected = cursor.rowcount
+            self.last_rowcount = rows_affected
             cursor.close()
 
             if rows_affected == 0:
@@ -537,7 +551,7 @@ class PostgreSQLConnector(BaseConnector):
 
             return True, f"{rows_affected} row(s) updated"
         except Exception as e:
-            self.connection.rollback()
+            self._rollback()
             return False, f"Update failed: {str(e)}"
 
     def delete_row(
@@ -610,8 +624,9 @@ class PostgreSQLConnector(BaseConnector):
             params = where_params
 
             cursor.execute(query, params)
-            self.connection.commit()
+            self._commit()
             rows_affected = cursor.rowcount
+            self.last_rowcount = rows_affected
             cursor.close()
 
             if rows_affected == 0:
@@ -619,5 +634,5 @@ class PostgreSQLConnector(BaseConnector):
 
             return True, f"{rows_affected} row(s) deleted"
         except Exception as e:
-            self.connection.rollback()
+            self._rollback()
             return False, f"Delete failed: {str(e)}"

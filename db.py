@@ -1127,6 +1127,36 @@ def insert_data():
         return error_response(e)
 
 
+MAX_BATCH_OPERATIONS = 5000
+
+
+@app.route('/api/data/batch', methods=['POST'])
+def batch_data():
+    """Save several inserts, updates and deletes as one unit (all or nothing where the database allows it)."""
+    data = (request.get_json(silent=True) or {})
+    table, operations = data.get('table'), data.get('operations')
+    if not data.get('connection_id') or not table or not isinstance(operations, list) or not operations:
+        return jsonify({'success': False, 'error': 'Connection ID, table and a list of operations are required'}), 400
+    if len(operations) > MAX_BATCH_OPERATIONS:
+        return jsonify({'success': False, 'error': f'At most {MAX_BATCH_OPERATIONS} changes can be saved at once'}), 400
+    if not all(isinstance(op, dict) and op.get('op') in ('insert', 'update', 'delete') for op in operations):
+        return jsonify({'success': False, 'error': 'Each change must be an insert, update or delete'}), 400
+
+    connector = get_connector(data['connection_id'])
+    if not connector:
+        return jsonify({'success': False, 'error': 'Not connected'}), 400
+    blocked = read_only_error(connector)
+    if blocked:
+        return blocked
+
+    try:
+        result = connector.apply_batch(table, operations, data.get('database'), bool(data.get('force')))
+    except Exception as e:
+        return error_response(e)
+    status = 200 if result['success'] else 409 if result.get('conflicts') else 422
+    return jsonify(result), status
+
+
 @app.route('/api/data', methods=['PUT'])
 def update_data():
     """Update rows."""

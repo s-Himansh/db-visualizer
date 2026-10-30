@@ -47,6 +47,16 @@ class OracleConnector(BaseConnector):
 
     PING_SQL = 'SELECT 1 FROM dual'
     LIMIT_STYLE = 'fetch'
+
+    def _ph(self, index: int) -> str:
+        return f':{index}'
+
+    def _lock_rows(self, table, conditions, database):
+        where, params = self._where(conditions)
+        cursor = self.connection.cursor()
+        cursor.execute(f"SELECT 1 FROM {self.table_ref(table, database)} WHERE {where} FOR UPDATE", params)
+        cursor.fetchall()
+        cursor.close()
     BUCKET_EXPR = 'TRUNC({x})'
 
     def table_ref(self, table, database):
@@ -324,7 +334,7 @@ class OracleConnector(BaseConnector):
                 row_count = len(rows)
             else:
                 # For INSERT, UPDATE, DELETE
-                self.connection.commit()
+                self._commit()
                 row_data = []
                 columns = []
                 row_count = cursor.rowcount
@@ -340,7 +350,7 @@ class OracleConnector(BaseConnector):
                 'error': None
             }
         except Exception as e:
-            self.connection.rollback()
+            self._rollback()
             execution_time = time.time() - start_time
             return {
                 'columns': [],
@@ -426,12 +436,12 @@ class OracleConnector(BaseConnector):
 
             cursor = self.connection.cursor()
             cursor.execute(query, list(data.values()))
-            self.connection.commit()
+            self._commit()
             cursor.close()
 
             return True, "Row inserted successfully"
         except Exception as e:
-            self.connection.rollback()
+            self._rollback()
             return False, f"Insert failed: {str(e)}"
 
     def update_row(
@@ -449,20 +459,23 @@ class OracleConnector(BaseConnector):
             set_clause = ', '.join([f"{self.q(col)} = :{i}" for i, col in enumerate(data.keys())])
 
             # Build WHERE clause
-            where_clause = ' AND '.join([f"{self.q(col)} = :{i + len(data)}" for i, col in enumerate(conditions.keys())])
+            where_clause, where_params = self._where(conditions, len(data))
 
             query = f"UPDATE {table} SET {set_clause} WHERE {where_clause}"
-            params = list(data.values()) + list(conditions.values())
+            params = list(data.values()) + where_params
 
             cursor = self.connection.cursor()
             cursor.execute(query, params)
-            self.connection.commit()
+            self._commit()
             rows_affected = cursor.rowcount
+            self.last_rowcount = rows_affected
             cursor.close()
 
+            if rows_affected == 0:
+                return False, "Update failed: no row matched. It may have been changed or deleted since you loaded it."
             return True, f"{rows_affected} row(s) updated"
         except Exception as e:
-            self.connection.rollback()
+            self._rollback()
             return False, f"Update failed: {str(e)}"
 
     def delete_row(
@@ -476,18 +489,20 @@ class OracleConnector(BaseConnector):
             table = self.qualified(database, table)
 
             # Build WHERE clause
-            where_clause = ' AND '.join([f"{self.q(col)} = :{i}" for i, col in enumerate(conditions.keys())])
+            where_clause, params = self._where(conditions)
 
             query = f"DELETE FROM {table} WHERE {where_clause}"
-            params = list(conditions.values())
 
             cursor = self.connection.cursor()
             cursor.execute(query, params)
-            self.connection.commit()
+            self._commit()
             rows_affected = cursor.rowcount
+            self.last_rowcount = rows_affected
             cursor.close()
 
+            if rows_affected == 0:
+                return False, "Delete failed: no row matched. It may already have been deleted."
             return True, f"{rows_affected} row(s) deleted"
         except Exception as e:
-            self.connection.rollback()
+            self._rollback()
             return False, f"Delete failed: {str(e)}"
