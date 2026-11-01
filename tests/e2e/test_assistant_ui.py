@@ -102,7 +102,8 @@ def test_what_is_sent_is_names_only(ready, fake_ai):
     assert 'customers' in sent and 'country' in sent and 'customers per country' in sent
     for value in ('Liam Patel', 'Ava Chen', 'example.com', ready.demo_db):
         assert value not in sent
-    assert fake_ai.last['headers']['x-api-key'] == KEY
+    sent = fake_ai.last['headers']
+    assert KEY in (sent.get('x-api-key') or sent.get('authorization') or '')   # 2.x SDKs use a Bearer token
 
 
 def test_show_what_is_sent_displays_it_and_sends_nothing(ready, fake_ai):

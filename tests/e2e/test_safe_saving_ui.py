@@ -26,7 +26,7 @@ def open_table(pg, name):
 def edit(pg, row, column, text):
     cell = pg.locator(f'.tab-content.active tr[data-row-index="{row}"] td[data-column={column}]')
     cell.click()
-    pg.keyboard.press('Meta+A')
+    pg.keyboard.press('ControlOrMeta+A')
     pg.keyboard.type(text)
     pg.keyboard.press('Tab')
 
