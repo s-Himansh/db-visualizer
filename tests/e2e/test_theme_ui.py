@@ -47,6 +47,8 @@ AUDIT = """minRatio => {
 def reset_theme(page):
     yield
     page.evaluate("fetch('/api/theme', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({theme: 'system'})})")
+    page.evaluate("""async () => { const l = await (await fetch('/api/saved-queries')).json();
+        for (const q of l.queries) await fetch('/api/saved-queries/' + q.id, {method: 'DELETE'}); }""")
 
 
 def use(pg, theme):
@@ -169,6 +171,23 @@ def screens(pg):
     pg.wait_for_selector('#ai-settings-modal.active')
     yield 'the assistant settings'
     pg.evaluate("document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'))")
+    pg.evaluate("""fetch('/api/saved-queries', {method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: 'Top customers', sql: 'select * from customers\\nlimit 10', connection_name: 'Demo shop'})}).then(() => app.savedQueries.load())""")
+    pg.click('#new-query-tab-btn')
+    pg.wait_for_selector('.tab-content.active .CodeMirror')
+    pg.click('.tab-content.active [data-action=saved-queries]')
+    pg.wait_for_selector('#saved-queries-list .saved-item')
+    yield 'the saved queries list'
+    pg.keyboard.press('Escape')
+    pg.evaluate("document.querySelector('.tab-content.active .CodeMirror').CodeMirror.setValue('select 1')")
+    manual_dialogs(pg)
+    pg.click('.tab-content.active [data-action=save-query]')
+    pg.wait_for_selector('.app-dialog-input')
+    pg.click('.app-dialog [data-answer=ok]')                 # empty name: shows the inline error
+    pg.wait_for_selector('.app-dialog-error', state='visible')
+    yield 'the name prompt with its error'
+    pg.keyboard.press('Escape')
+    pg.wait_for_selector('.app-dialog', state='detached')
     pg.click('#new-query-tab-btn')
     pg.wait_for_selector('.tab-content.active .CodeMirror')
     pg.evaluate("document.querySelector('.tab-content.active .CodeMirror').CodeMirror.setValue('drop table customers')")

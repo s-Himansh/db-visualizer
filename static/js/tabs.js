@@ -289,6 +289,8 @@ class TabManager {
                         <button type="button" class="btn btn-primary" data-tab-id="${tab.id}" data-action="execute" title="Execute query (Cmd+Enter). Runs selected text if any, otherwise runs entire query.">${executeLabel}</button>
                         ${ColumnInsights.supported(dbType) ? `<button type="button" class="btn" data-tab-id="${tab.id}" data-action="ask" title="Describe what you want and get SQL (optional, uses the Anthropic API)">Ask</button>` : ''}
                         <button type="button" class="btn" data-tab-id="${tab.id}" data-action="clear">Clear</button>
+                        <button type="button" class="btn" data-tab-id="${tab.id}" data-action="save-query" title="Save this query under a name (saves the selected text if there is a selection)">Save</button>
+                        <button type="button" class="btn" data-tab-id="${tab.id}" data-action="saved-queries" title="Your saved queries">Saved</button>
                         <button type="button" class="btn" data-tab-id="${tab.id}" data-action="history">History</button>
                         <button type="button" class="btn" data-tab-id="${tab.id}" data-action="export-csv">Export CSV</button>
                         <button type="button" class="btn" data-tab-id="${tab.id}" data-action="export-json">Export JSON</button>
@@ -742,6 +744,12 @@ class TabManager {
                     if (tab.editor) {
                         tab.editor.setValue('');
                     }
+                    break;
+                case 'save-query':
+                    window.app.savedQueries.saveFrom(tab);
+                    break;
+                case 'saved-queries':
+                    window.app.savedQueries.open(tab);
                     break;
                 case 'history':
                     this.showQueryHistory(tab);

@@ -528,6 +528,133 @@ def save_settings(settings: dict):
     os.replace(tmp, SETTINGS_FILE)
 
 
+# ---- saved queries: SQL you want to keep, stored on disk so a webview that forgets its storage cannot lose them --------
+
+SAVED_QUERIES_FILE = CONFIG_DIR / 'saved_queries.json'
+SAVED_QUERIES_LOCK = threading.Lock()
+MAX_SAVED_QUERIES = 500
+MAX_QUERY_NAME = 100
+MAX_QUERY_SQL = 100_000
+
+
+def load_saved_queries() -> list:
+    try:
+        queries = json.loads(SAVED_QUERIES_FILE.read_text(encoding='utf-8'))
+        if not isinstance(queries, list):
+            return []
+        return [q for q in queries if isinstance(q, dict) and all(isinstance(q.get(k), str) for k in ('id', 'name', 'sql'))]
+    except FileNotFoundError:
+        return []
+    except (OSError, ValueError):
+        # unreadable: keep a copy so the next save cannot silently destroy whatever is in there
+        try:
+            shutil.copy2(SAVED_QUERIES_FILE, SAVED_QUERIES_FILE.with_suffix('.corrupt.json'))
+        except OSError:
+            pass
+        return []
+
+
+def write_saved_queries(queries: list):
+    tmp = SAVED_QUERIES_FILE.with_suffix('.tmp')
+    with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), 'w', encoding='utf-8') as f:
+        json.dump(queries, f, indent=2, ensure_ascii=False)
+    os.replace(tmp, SAVED_QUERIES_FILE)
+
+
+def clean_query_fields(data: dict, need_both: bool):
+    """(name, sql, error): trimmed, length-checked values from a request body."""
+    name, sql = data.get('name'), data.get('sql')
+    if (need_both or name is not None) and (not isinstance(name, str) or not name.strip()):
+        return None, None, 'Give the query a name.'
+    if (need_both or sql is not None) and (not isinstance(sql, str) or not sql.strip()):
+        return None, None, 'There is no SQL to save.'
+    if name is not None and len(name.strip()) > MAX_QUERY_NAME:
+        return None, None, f'The name can be at most {MAX_QUERY_NAME} characters.'
+    if sql is not None and len(sql) > MAX_QUERY_SQL:
+        return None, None, f'A saved query can be at most {MAX_QUERY_SQL:,} characters.'
+    return (name.strip() if name is not None else None), sql, None
+
+
+def query_summary(q: dict) -> dict:
+    return {k: q.get(k) for k in ('id', 'name', 'sql', 'connection_name', 'updated')}
+
+
+def find_by_name(queries: list, name: str):
+    return next((q for q in queries if q['name'].casefold() == name.casefold()), None)
+
+
+@app.route('/api/saved-queries', methods=['GET'])
+def list_saved_queries():
+    with SAVED_QUERIES_LOCK:
+        queries = load_saved_queries()
+    queries.sort(key=lambda q: q.get('updated', ''), reverse=True)
+    return jsonify({'success': True, 'queries': [query_summary(q) for q in queries]})
+
+
+@app.route('/api/saved-queries', methods=['POST'])
+def create_saved_query():
+    """Save a query under a name. A name that already exists is a 409 unless `replace` is true."""
+    data = request.get_json(silent=True) or {}
+    name, sql, problem = clean_query_fields(data, need_both=True)
+    if problem:
+        return jsonify({'success': False, 'error': problem}), 400
+    connection = data.get('connection_name')
+    connection = connection.strip()[:MAX_QUERY_NAME] if isinstance(connection, str) and connection.strip() else None
+    now = datetime.now().isoformat(timespec='microseconds')
+    with SAVED_QUERIES_LOCK:
+        queries = load_saved_queries()
+        existing = find_by_name(queries, name)
+        if existing and not data.get('replace'):
+            return jsonify({'success': False, 'exists': True, 'id': existing['id'],
+                            'error': f'A saved query called "{existing["name"]}" already exists.'}), 409
+        if existing:
+            existing.update(sql=sql, connection_name=connection, updated=now)
+            saved = existing
+        else:
+            if len(queries) >= MAX_SAVED_QUERIES:
+                return jsonify({'success': False, 'error': f'You can keep at most {MAX_SAVED_QUERIES} saved queries. Delete some first.'}), 400
+            saved = {'id': secrets.token_hex(6), 'name': name, 'sql': sql, 'connection_name': connection, 'updated': now}
+            queries.append(saved)
+        write_saved_queries(queries)
+    return jsonify({'success': True, 'query': query_summary(saved)}), (200 if existing else 201)
+
+
+@app.route('/api/saved-queries/<query_id>', methods=['PUT'])
+def update_saved_query(query_id):
+    """Rename a saved query and/or change its SQL."""
+    name, sql, problem = clean_query_fields(request.get_json(silent=True) or {}, need_both=False)
+    if problem:
+        return jsonify({'success': False, 'error': problem}), 400
+    if name is None and sql is None:
+        return jsonify({'success': False, 'error': 'Nothing to change.'}), 400
+    with SAVED_QUERIES_LOCK:
+        queries = load_saved_queries()
+        target = next((q for q in queries if q.get('id') == query_id), None)
+        if not target:
+            return jsonify({'success': False, 'error': 'That saved query no longer exists.'}), 404
+        clash = find_by_name(queries, name) if name is not None else None
+        if clash and clash is not target:
+            return jsonify({'success': False, 'exists': True, 'error': f'A saved query called "{clash["name"]}" already exists.'}), 409
+        if name is not None:
+            target['name'] = name
+        if sql is not None:
+            target['sql'] = sql
+        target['updated'] = datetime.now().isoformat(timespec='microseconds')
+        write_saved_queries(queries)
+    return jsonify({'success': True, 'query': query_summary(target)})
+
+
+@app.route('/api/saved-queries/<query_id>', methods=['DELETE'])
+def delete_saved_query(query_id):
+    with SAVED_QUERIES_LOCK:
+        queries = load_saved_queries()
+        kept = [q for q in queries if q.get('id') != query_id]
+        if len(kept) == len(queries):
+            return jsonify({'success': False, 'error': 'That saved query no longer exists.'}), 404
+        write_saved_queries(kept)
+    return jsonify({'success': True})
+
+
 THEMES = ('system', 'light', 'dark')
 
 
