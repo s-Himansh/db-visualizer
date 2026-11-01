@@ -349,7 +349,9 @@ class RelationsManager {
         // pan and zoom
         const view = { x: 0, y: 0, k: 1 };
         const apply = () => viewport.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`);
+        let touched = false;      // true once the user has panned or zoomed: then the view is theirs, and a resize leaves it alone
         const zoomAt = (factor, cx, cy) => {
+            touched = true;
             const k = Math.min(2.5, Math.max(0.15, view.k * factor));
             view.x = cx - (cx - view.x) * (k / view.k);
             view.y = cy - (cy - view.y) * (k / view.k);
@@ -357,6 +359,7 @@ class RelationsManager {
             apply();
         };
         const fit = () => {
+            touched = false;
             const box = canvas.getBoundingClientRect();
             viewport.removeAttribute('transform');
             const bb = viewport.getBBox();                       // everything drawn, edges and lanes included
@@ -367,6 +370,7 @@ class RelationsManager {
             apply();
         };
         const centreOn = (name) => {
+            touched = true;
             const n = nodes.get(name), box = canvas.getBoundingClientRect();
             view.k = Math.max(view.k, 0.9);
             view.x = box.width / 2 - (n.x + R.NODE_W / 2) * view.k;
@@ -388,7 +392,7 @@ class RelationsManager {
             if (!drag) return;
             const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
             if (Math.abs(dx) + Math.abs(dy) > 4) { drag.moved = true; svg.dataset.dragged = '1'; }
-            if (drag.moved) { view.x = drag.vx + dx; view.y = drag.vy + dy; apply(); }
+            if (drag.moved) { touched = true; view.x = drag.vx + dx; view.y = drag.vy + dy; apply(); }
         }, { signal });
         window.addEventListener('mouseup', () => { drag = null; setTimeout(() => delete svg.dataset.dragged, 0); }, { signal });
 
@@ -409,6 +413,15 @@ class RelationsManager {
         search.oninput = doSearch;
         search.onkeydown = (e) => { if (e.key === 'Enter') { const first = doSearch(); if (first) centreOn(first); } };
         search.value = '';
+
+        // Fitting happens once, when the map is drawn. When its area changes afterwards (the suggestions panel opening or
+        // closing, the window resizing, the tab becoming visible) re-fit, unless the user has moved the view themselves.
+        const watcher = new ResizeObserver(() => {
+            const box = canvas.getBoundingClientRect();
+            if (!touched && canvas.isConnected && box.width > 50 && box.height > 50) fit();
+        });
+        watcher.observe(canvas);
+        signal.addEventListener('abort', () => watcher.disconnect());
 
         requestAnimationFrame(() => { fit(); svg.dataset.ready = '1'; });
     }

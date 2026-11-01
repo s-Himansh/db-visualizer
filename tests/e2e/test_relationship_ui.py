@@ -249,3 +249,39 @@ def test_the_sample_shop_walks_through_the_whole_feature(page):
     box = cell.bounding_box()
     cell.click(position={'x': box['width'] - 10, 'y': box['height'] / 2})
     page.wait_for_function("document.querySelector('#tabs-header .tab.active .tab-label').textContent.startsWith('customers')")
+
+
+# ---- the map keeps everything in view when its area changes ----------------------------------------------------------------------------
+
+OFF_SCREEN = """() => { const canvas = document.querySelector('.tab-content.active .map-canvas').getBoundingClientRect();
+  return [...document.querySelectorAll('.tab-content.active .map-node')].filter(n => { const b = n.getBoundingClientRect();
+    return b.top < canvas.top - 1 || b.bottom > canvas.bottom + 1 || b.left < canvas.left - 1 || b.right > canvas.right + 1; })
+    .map(n => n.dataset.table); }"""
+
+
+def test_opening_the_panel_in_a_short_window_does_not_push_tables_out_of_view(page):
+    page.set_viewport_size({'width': 1400, 'height': 600})
+    page.click('#welcome-sample')
+    page.wait_for_selector('#tables-content .tree-item', timeout=15000)
+    open_map(page)
+    assert page.evaluate(OFF_SCREEN) == []
+    find(page)                                                   # the panel takes room from the map
+    page.wait_for_timeout(300)
+    assert page.evaluate(OFF_SCREEN) == []
+    page.click('.tab-content.active .map-suggest-head .btn')     # and gives it back
+    page.wait_for_timeout(300)
+    assert page.evaluate(OFF_SCREEN) == []
+
+
+def test_a_map_you_have_moved_is_left_where_you_put_it(page):
+    page.click('#welcome-sample')
+    page.wait_for_selector('#tables-content .tree-item', timeout=15000)
+    open_map(page)
+    page.click('.tab-content.active [data-map=zoom-in]')          # you chose this view
+    before = page.evaluate("document.querySelector('.tab-content.active .map-viewport').getAttribute('transform')")
+    find(page)
+    page.wait_for_timeout(300)
+    assert page.evaluate("document.querySelector('.tab-content.active .map-viewport').getAttribute('transform')") == before
+    page.click('.tab-content.active [data-map=fit]')              # Fit hands control back
+    page.wait_for_timeout(200)
+    assert page.evaluate("document.querySelector('.tab-content.active .map-viewport').getAttribute('transform')") != before
