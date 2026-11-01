@@ -2,6 +2,7 @@ from flask import Flask, Response, abort, jsonify, request
 from werkzeug.exceptions import HTTPException
 from flask.json.provider import DefaultJSONProvider
 import atexit
+import contextlib
 import json
 import logging
 import os
@@ -29,6 +30,7 @@ from db_connectors.cassandra import CassandraConnector
 from db_connectors import safety
 from sample_data import build_sample
 import ai_assistant
+import csv_import
 from db_connectors.tunnel import KnownHosts, SSHError, SSHTunnel, UnknownHostKey
 
 
@@ -1284,6 +1286,103 @@ def insert_data():
 
 
 MAX_BATCH_OPERATIONS = 5000
+
+
+def import_target():
+    """(connector, table, database, error response) for the CSV import endpoints, which take a multipart form."""
+    form = request.form
+    table = (form.get('table') or '').strip()
+    if not form.get('connection_id') or not table or 'file' not in request.files:
+        return None, None, None, (jsonify({'success': False, 'error': 'Choose a file, a connection and a table.'}), 400)
+    connector = get_connector(form['connection_id'])
+    if not connector:
+        return None, None, None, (jsonify({'success': False, 'error': 'Not connected'}), 400)
+    blocked = read_only_error(connector)
+    if blocked:
+        return None, None, None, (blocked[0], blocked[1])
+    if not connector.SUPPORTS_TRANSACTIONS:
+        return None, None, None, (jsonify({'success': False, 'error':
+                                  'CSV import needs a database that can roll back, so a bad row cannot leave half a file behind. '
+                                  'It works with SQLite, PostgreSQL, MySQL, SQL Server and Oracle.'}), 400)
+    return connector, table, (form.get('database') or None), None
+
+
+def read_import_file():
+    """Parse the uploaded file with the delimiter and header choices from the form."""
+    name = (request.form.get('delimiter') or '').strip().lower()
+    if name and name not in csv_import.DELIMITERS:
+        raise csv_import.ImportProblem('Choose comma, semicolon, tab or pipe as the delimiter.')
+    raw = request.files['file'].read(csv_import.MAX_IMPORT_BYTES + 1)
+    return csv_import.analyze(raw, csv_import.DELIMITERS.get(name), request.form.get('has_header', 'true') != 'false')
+
+
+@app.route('/api/import/preview', methods=['POST'])
+def import_preview():
+    """Read a CSV file and say how it lines up with a table: its columns, a few rows and a suggested mapping."""
+    connector, table, database, error = import_target()
+    if error:
+        return error
+    try:
+        parsed = read_import_file()
+        columns = connector.get_schema(table, database)['columns']
+        if not columns:
+            return jsonify({'success': False, 'error': f'The table "{table}" was not found.'}), 404
+    except csv_import.ImportProblem as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        return error_response(e)
+    names = [c['name'] for c in columns]
+    delimiter_name = next(n for n, ch in csv_import.DELIMITERS.items() if ch == parsed['delimiter'])
+    return jsonify({
+        'success': True, 'headers': parsed['headers'], 'sample_rows': parsed['rows'][:5], 'total_rows': len(parsed['rows']),
+        'delimiter': delimiter_name, 'encoding': parsed['encoding'], 'has_header': parsed['has_header'], 'problems': parsed['problems'],
+        'table_columns': [{**c, 'required': not c.get('nullable', True) and c.get('default') is None and not c.get('primary_key')}
+                          for c in columns],
+        'suggested_mapping': csv_import.suggest_mapping(names, parsed['headers'])})
+
+
+@app.route('/api/import', methods=['POST'])
+def import_csv():
+    """Insert every row of a CSV file into a table, all or nothing. `dry_run` checks it and then rolls it back."""
+    connector, table, database, error = import_target()
+    if error:
+        return error
+    try:
+        parsed = read_import_file()
+        if parsed['problems']:
+            return jsonify({'success': False, 'error': parsed['problems'][0], 'problems': parsed['problems']}), 400
+        schema = connector.get_schema(table, database)['columns']
+        columns = [c['name'] for c in schema]
+        if not columns:
+            return jsonify({'success': False, 'error': f'The table "{table}" was not found.'}), 404
+        try:
+            mapping = json.loads(request.form.get('mapping') or 'null')
+        except ValueError:
+            mapping = None
+        chosen = csv_import.check_mapping(mapping, columns, len(parsed['headers']))
+    except csv_import.ImportProblem as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        return error_response(e)
+
+    date_columns = {c['name'] for c in schema if c['name'] in chosen and csv_import.is_date_type(c.get('type'))}
+    problems = csv_import.date_problems(parsed['rows'], chosen, date_columns)
+    if problems:
+        return jsonify({'success': False, 'error': problems[0], 'problems': problems}), 400
+    operations = csv_import.build_operations(parsed['rows'], chosen, request.form.get('empty_as_null', 'true') != 'false', date_columns)
+    dry_run = request.form.get('dry_run') == 'true'
+    try:
+        # hold the connection for the whole import so nothing else runs inside Oracle's temporary date formats
+        with getattr(connector, '_lock', contextlib.nullcontext()), connector.import_session():
+            result = connector.apply_batch(table, operations, database, dry_run=dry_run)
+    except Exception as e:
+        return error_response(e)
+    if result['success']:
+        return jsonify({'success': True, 'imported': result['applied'], 'dry_run': dry_run})
+    row = result.get('failed_at')
+    message = result['error'] if row is None else f'Row {row + 1}: {result["error"]}'
+    return jsonify({'success': False, 'error': message, 'row': None if row is None else row + 1,
+                    'rolled_back': result.get('rolled_back', True)}), 422
 
 
 @app.route('/api/data/batch', methods=['POST'])

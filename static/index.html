@@ -242,6 +242,25 @@
     </div>
 
     <!-- Assistant settings -->
+    <input type="file" id="import-file" accept=".csv,.tsv,.txt,text/csv,text/plain,text/tab-separated-values" hidden>
+    <div class="modal" id="import-modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3 id="import-title">Import CSV</h3>
+                <span class="modal-close" id="import-close" role="button" aria-label="Close" tabindex="0">×</span>
+            </div>
+            <div class="modal-body">
+                <div id="import-body"></div>
+                <div class="import-status" id="import-status" role="status" style="display: none;"></div>
+                <div class="form-actions">
+                    <button type="button" class="btn" id="import-cancel">Cancel</button>
+                    <button type="button" class="btn" id="import-check" title="Try every row and undo it again, to see whether the import would work">Check without importing</button>
+                    <button type="button" class="btn btn-primary" id="import-run">Import</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal" id="saved-queries-modal">
         <div class="modal-content modal-medium">
             <div class="modal-header">
@@ -333,6 +352,7 @@
     <script src="/static/js/insights.js?v=20261101a"></script>
     <script src="/static/js/assistant.js?v=20261101a"></script>
     <script src="/static/js/saved.js?v=20261101a"></script>
+    <script src="/static/js/importer.js?v=20261101a"></script>
     <script src="/static/js/relations.js?v=20261101a"></script>
     <script src="/static/js/connection.js?v=20261101a"></script>
     <script src="/static/js/query.js?v=20261101a"></script>

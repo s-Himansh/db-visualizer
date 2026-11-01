@@ -622,6 +622,7 @@ select.form-control, .table-search-columns, .database-selector {
 .connection-type.ro, .ro-tag { color: var(--pending); border-color: var(--pending-border); background: var(--pending-wash); }
 .ro-tag { font-size: 11px; border: 1px solid; border-radius: 999px; padding: 0 7px; margin-left: 6px; }
 .table-data-container.read-only [data-action="add-row"],
+.table-data-container.read-only [data-action="import-csv"],
 .table-data-container.read-only [data-action="delete-row"],
 .table-data-container.read-only [data-action="save-changes"],
 .table-data-container.read-only [data-action="discard-changes"] { display: none !important; }
@@ -897,3 +898,34 @@ body[data-env="production"] .status-bar::after { content: 'PRODUCTION'; margin-l
 #saved-queries-empty { margin-top: 12px; }
 .app-dialog-input { width: 100%; margin-top: 4px; }
 .app-dialog-error { color: var(--danger); margin-top: 6px; }
+
+/* ---------- CSV import ---------- */
+#import-modal .modal-content { max-width: 880px; }
+.import-summary { margin-bottom: 10px; }
+.import-muted { color: var(--muted); font-size: 12px; }
+.import-problems, .import-warning, .import-status { border-radius: var(--radius); padding: 9px 12px; margin: 10px 0; border: 1px solid var(--line); }
+.import-problems { background: var(--danger-wash); border-color: var(--danger-border); color: var(--text); }
+.import-problems ul { margin: 6px 0 6px 18px; }
+.import-warning { background: var(--pending-wash); border-color: var(--pending-border); color: var(--text); }
+.import-status.ok { background: var(--accent-wash); border-color: var(--accent-border); }
+.import-status.error { background: var(--danger-wash); border-color: var(--danger-border); }
+.import-status.busy { background: var(--raised); color: var(--muted); }
+.import-options { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center; margin: 10px 0; }
+.import-options select { display: inline-block; width: auto; margin-left: 6px; }
+.import-check { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.import-mapping-wrap { max-height: 34vh; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); }
+.import-mapping { width: 100%; border-collapse: collapse; }
+.import-mapping th, .import-mapping td { padding: 5px 10px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.import-mapping th { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: 500; }
+.import-mapping select { width: 100%; }
+.import-column-name { font-family: var(--font-data); color: var(--text-strong); }
+.import-tag { margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: 10.5px; border: 1px solid var(--line-strong); color: var(--muted); }
+.import-tag-required { border-color: var(--pending-border); color: var(--pending); }
+.import-sample { font-family: var(--font-data); color: var(--muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-preview { margin-top: 12px; }
+.import-preview-scroll { overflow: auto; max-height: 20vh; border: 1px solid var(--line); border-radius: var(--radius); margin-top: 4px; }
+.import-sample-table { border-collapse: collapse; width: 100%; font-family: var(--font-data); font-size: 12px; }
+.import-sample-table th, .import-sample-table td { padding: 3px 9px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.import-sample-table th { background: var(--panel); color: var(--muted); font-weight: 500; }
+.import-sample-table .import-null { color: var(--faint); font-style: italic; }
+#import-body + .import-status { margin-top: 12px; }
