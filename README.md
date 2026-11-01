@@ -88,11 +88,19 @@ Mark a connection Local, Development, Staging or Production. The window takes on
 <tr>
 <td valign="top">
 
+### 🔖 Saved queries
+Press **Save** in a query tab to keep the SQL under a name (just the selection, if you've selected something). **Saved** lists them with a filter; open one in the editor or a new tab, rename it, delete it. They also show up in ⌘K. They're kept on disk, not in the browser, so they survive restarts.
+
+</td>
+<td valign="top">
+
 ### ✏️ Safe editing
 Edit cells in the grid, add rows, delete rows, then save. It all happens together or not at all, and it refuses to overwrite a row someone else changed. [See how](#-saving-edits-safely).
 
 </td>
-<td valign="top">
+</tr>
+<tr>
+<td colspan="2" valign="top">
 
 ### 🤖 SQL assistant <sub>optional, off by default</sub>
 Describe a query in plain English and Claude writes it into the editor. It only ever sees names, never data. [See exactly what is sent](#-sql-assistant).
@@ -141,7 +149,7 @@ flowchart LR
 | UI | `static/js/` (`app`, `connection`, `query`, `tabs`, `ui`, `palette`, `relations`, `insights`, `assistant`) |
 | SQL assistant | `ai_assistant.py` |
 | Sample shop database | `sample_data.py` |
-| Your data | `~/Library/Application Support/DB Visualizer` (saved connections, `app.log`, known SSH hosts) |
+| Your data | `~/Library/Application Support/DB Visualizer` (saved connections, saved queries, `app.log`, known SSH hosts) |
 
 </details>
 
@@ -283,7 +291,7 @@ Off until you turn it on (**Ask** in a query tab, or ⌘K → *SQL assistant set
 - **No usable keychain?** The key stays in `secret.key` (`0600`). With an explicit `DBV_DATA_DIR` (portable or test setups) the key stays in that folder and the keychain isn't touched. `DBV_KEY_STORE=keychain|file` overrides this.
 - **The key is never replaced once it exists.** A locked or unreadable keychain stops the app with a clear message instead of inventing a new key that would orphan every saved password.
 - **Back up carefully.** `connections.json` is useless without the key. Lose the keychain item and your saved passwords are gone (the connections remain; re-enter the passwords).
-- The data folder is `0700`; `connections.json` is `0600`.
+- The data folder is `0700`; `connections.json` and `saved_queries.json` are `0600`. Saved queries are stored as plain text (unlike passwords), so don't put secrets in the SQL you save.
 - **The UI talks to `127.0.0.1` only.** Every `/api` call needs a per-launch token and a loopback `Host` header, and CORS is off, so other local processes and web pages can't reach your databases.
 - Table and column names are quoted for each database, never pasted into SQL, and values are always parameters.
 - Logs go to `app.log` in the data folder (rotated) and contain no row data. `DBV_DEBUG=1` opens the web inspector.

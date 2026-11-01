@@ -66,5 +66,79 @@ window.ui = (() => {
         });
     }
 
-    return { notify, confirm: confirmDialog };
+    // Asks for one line of text. Resolves with the trimmed text, or null on Cancel, Escape, the close button or a click outside.
+    function promptDialog(message, { title = 'Enter a value', value = '', confirmLabel = 'OK', cancelLabel = 'Cancel', maxLength = 100, emptyMessage = 'Enter a value first.' } = {}) {
+        return new Promise(resolve => {
+            const root = document.createElement('div');
+            root.className = 'modal active app-dialog';
+            root.setAttribute('role', 'dialog');
+            root.setAttribute('aria-modal', 'true');
+            root.innerHTML = `
+                <div class="modal-content app-dialog-box">
+                    <div class="modal-header">
+                        <h3 class="app-dialog-title"></h3>
+                        <span class="modal-close" role="button" aria-label="Cancel" tabindex="0">×</span>
+                    </div>
+                    <div class="modal-body">
+                        <p class="app-dialog-message"></p>
+                        <input type="text" class="form-control app-dialog-input" autocomplete="off" spellcheck="false">
+                        <p class="app-dialog-error form-hint" role="alert" style="display: none;"></p>
+                        <div class="form-actions">
+                            <button type="button" class="btn" data-answer="cancel"></button>
+                            <button type="button" class="btn btn-primary" data-answer="ok"></button>
+                        </div>
+                    </div>
+                </div>`;
+            // textContent / value, never innerHTML
+            root.querySelector('.app-dialog-title').textContent = title;
+            root.querySelector('.app-dialog-message').textContent = message;
+            const input = root.querySelector('.app-dialog-input');
+            const error = root.querySelector('.app-dialog-error');
+            input.maxLength = maxLength;
+            input.value = value;
+            const ok = root.querySelector('[data-answer=ok]');
+            const cancel = root.querySelector('[data-answer=cancel]');
+            ok.textContent = confirmLabel;
+            cancel.textContent = cancelLabel;
+
+            const previous = document.activeElement;
+            const done = (answer) => {
+                document.removeEventListener('keydown', onKey, true);
+                root.remove();
+                if (previous && previous.focus) previous.focus();
+                resolve(answer);
+            };
+            const submit = () => {
+                const text = input.value.trim();
+                if (!text) {
+                    error.textContent = emptyMessage;
+                    error.style.display = '';
+                    input.focus();
+                    return;
+                }
+                done(text);
+            };
+            const onKey = (e) => {
+                if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); done(null); }
+                else if (e.key === 'Enter' && document.activeElement === input) { e.preventDefault(); e.stopPropagation(); submit(); }
+                else if (e.key === 'Tab') {   // keep focus inside the dialog
+                    const order = [input, cancel, ok];
+                    const next = order[(order.indexOf(document.activeElement) + (e.shiftKey ? order.length - 1 : 1)) % order.length];
+                    e.preventDefault();
+                    next.focus();
+                }
+            };
+            input.addEventListener('input', () => { error.style.display = 'none'; });
+            ok.addEventListener('click', submit);
+            cancel.addEventListener('click', () => done(null));
+            root.querySelector('.modal-close').addEventListener('click', () => done(null));
+            root.addEventListener('mousedown', (e) => { if (e.target === root) done(null); });
+            document.addEventListener('keydown', onKey, true);
+            document.body.appendChild(root);
+            input.focus();
+            input.select();
+        });
+    }
+
+    return { notify, confirm: confirmDialog, prompt: promptDialog };
 })();

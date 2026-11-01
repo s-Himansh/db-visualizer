@@ -242,6 +242,20 @@
     </div>
 
     <!-- Assistant settings -->
+    <div class="modal" id="saved-queries-modal">
+        <div class="modal-content modal-medium">
+            <div class="modal-header">
+                <h3>Saved queries</h3>
+                <span class="modal-close" id="saved-queries-close" role="button" aria-label="Close" tabindex="0">×</span>
+            </div>
+            <div class="modal-body">
+                <input type="search" class="form-control" id="saved-queries-filter" placeholder="Filter by name or SQL" aria-label="Filter saved queries" autocomplete="off">
+                <div class="saved-list" id="saved-queries-list"></div>
+                <p class="form-hint" id="saved-queries-empty"></p>
+            </div>
+        </div>
+    </div>
+
     <div class="modal" id="ai-settings-modal">
         <div class="modal-content modal-medium">
             <div class="modal-header">
@@ -318,6 +332,7 @@
     <script src="/static/js/ui.js?v=20261101a"></script>
     <script src="/static/js/insights.js?v=20261101a"></script>
     <script src="/static/js/assistant.js?v=20261101a"></script>
+    <script src="/static/js/saved.js?v=20261101a"></script>
     <script src="/static/js/relations.js?v=20261101a"></script>
     <script src="/static/js/connection.js?v=20261101a"></script>
     <script src="/static/js/query.js?v=20261101a"></script>

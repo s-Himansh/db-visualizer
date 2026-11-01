@@ -52,6 +52,9 @@ class CommandPalette {
                 items.push({ group: 'Open tabs', label: tab.title, hint: tab.type, run: () => app.tabManager.switchTab(id) });
             }
         }
+        for (const q of app.savedQueries ? app.savedQueries.items : []) {
+            if (active) items.push({ group: 'Saved queries', label: q.name, hint: 'open in a new query tab', run: () => app.savedQueries.openInNewTab(q) });
+        }
         const actions = [
             ['New query', 'write SQL', () => document.getElementById('new-query-tab-btn').click(), !!active],
             ['Show the schema map', 'how tables relate', () => mapBtn.click(), !!active && !!database],
@@ -62,6 +65,10 @@ class CommandPalette {
                 else { document.getElementById('new-query-tab-btn').click(); setTimeout(() => { const t = tm.tabs.get(tm.activeTabId); if (t) app.assistant.toggle(t); }, 250); }
             }, !!active],
             ['SQL assistant settings', 'API key and what is sent', () => app.assistant.openSettings(), true],
+            ['Saved queries', 'browse, rename or delete', () => {
+                const tm = app.tabManager;
+                app.savedQueries.open(tm.tabs.get(tm.activeTabId));
+            }, true],
             ['Theme: follow the system', 'light or dark, as your computer is set', () => Theme.set('system'), Theme.preference !== 'system'],
             ['Theme: light', 'bright background', () => Theme.set('light'), Theme.preference !== 'light'],
             ['Theme: dark', 'dark background', () => Theme.set('dark'), Theme.preference !== 'dark'],

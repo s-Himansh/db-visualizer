@@ -26,6 +26,7 @@ class DatabaseVisualizer {
             this.tabManager = new TabManager();
         }
         Theme.init();
+        this.savedQueries = new SavedQueries();
         this.relations = new RelationsManager();
         this.palette = new CommandPalette();
         this.insights = new ColumnInsights();
