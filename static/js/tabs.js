@@ -345,6 +345,7 @@ class TabManager {
                         <button class="btn btn-sm btn-danger" data-tab-id="${tab.id}" data-action="delete-row">Delete rows</button>
                         <button class="btn btn-sm btn-primary" data-tab-id="${tab.id}" data-action="save-changes" style="display: none;">Save changes</button>
                         <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="discard-changes" style="display: none;">Discard</button>
+                        <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="import-csv" title="Add rows to this table from a CSV file">Import CSV</button>
                         <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="export-table-csv">Export CSV</button>
                         <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="export-table-json">Export JSON</button>
                         <span class="results-info" id="table-info-${tab.id}">${this.escapeHtml(tab.state.tableName)}</span>
@@ -1907,6 +1908,9 @@ class TabManager {
             switch (action) {
                 case 'add-row':
                     this.addNewRow(tab);
+                    break;
+                case 'import-csv':
+                    window.app.csvImporter.start(tab);
                     break;
                 case 'delete-row':
                     await this.deleteSelectedRows(tab);

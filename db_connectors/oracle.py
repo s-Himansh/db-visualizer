@@ -1,3 +1,4 @@
+import contextlib
 import logging
 logger = logging.getLogger(__name__)
 import oracledb  # python-oracledb: 'thin' mode by default, so no Oracle Instant Client install is needed
@@ -20,6 +21,26 @@ def serialize_value(value):
 
 class OracleConnector(BaseConnector):
     """Oracle database connector implementation."""
+
+    @contextlib.contextmanager
+    def import_session(self):
+        """Oracle reads date text as 04-MAR-26 unless told otherwise. For an import, read 2026-03-04 10:20:30 instead,
+        and put the session's own formats back afterwards so nobody's queries change."""
+        names = ('NLS_DATE_FORMAT', 'NLS_TIMESTAMP_FORMAT')
+        cursor = self.connection.cursor()
+        cursor.execute("SELECT parameter, value FROM nls_session_parameters WHERE parameter IN ('NLS_DATE_FORMAT', 'NLS_TIMESTAMP_FORMAT')")
+        before = dict(cursor.fetchall())
+        cursor.execute("ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS'")
+        cursor.execute("ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF6'")
+        cursor.close()
+        try:
+            yield
+        finally:
+            cursor = self.connection.cursor()
+            for name in names:
+                if name in before:
+                    cursor.execute(f"ALTER SESSION SET {name} = '{before[name]}'")
+            cursor.close()
 
     def connect(self) -> bool:
         """Establish connection to Oracle database."""

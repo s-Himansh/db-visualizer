@@ -100,13 +100,20 @@ Edit cells in the grid, add rows, delete rows, then save. It all happens togethe
 </td>
 </tr>
 <tr>
-<td colspan="2" valign="top">
+<td valign="top">
+
+### 📥 CSV import
+**Import CSV** on a table opens a dialog: pick the separator, say which file column goes into which table column, **Check without importing** to try every row and undo it again, then import. All or nothing: one bad row and nothing is added. See [what it accepts](#-what-csv-import-accepts).
+
+</td>
+<td valign="top">
 
 ### 🤖 SQL assistant <sub>optional, off by default</sub>
 Describe a query in plain English and Claude writes it into the editor. It only ever sees names, never data. [See exactly what is sent](#-sql-assistant).
 
 </td>
 </tr>
+
 </table>
 
 Also in the box: SSH tunnels, read-only connections, a query editor with autocomplete, a data grid with search, sorting and paging, a schema viewer, CSV/JSON export, query history, and **light and dark themes**: the button in the top bar cycles *System* (follows your computer), *Light* and *Dark*, and your choice is remembered.
@@ -211,6 +218,19 @@ sequenceDiagram
 - **MongoDB, Redis and Cassandra can't roll back.** They stop at the first failure and tell you how many changes were applied.
 - A row that was already deleted doesn't block a delete. An edit to a row that no longer exists is reported.
 - Updates and deletes that match no row are failures, never silent successes.
+
+### 📥 What CSV import accepts
+
+**Import CSV** on a table tab adds the rows of a file to that table. Nothing is guessed: you choose the column for each value, and **Check without importing** runs every row and then undoes it, so you find problems before they cost you anything.
+
+- **All or nothing.** One bad row (a duplicate key, text in a number column, a missing required value) and nothing is imported. The message names the row, counting data rows without the header.
+- **Works with** SQLite, PostgreSQL, MySQL, SQL Server and Oracle: databases that can roll back. Not MongoDB, Redis or Cassandra. It also refuses read-only connections, and asks first on Production.
+- **Reads** comma, semicolon, tab or pipe separated files, with or without a header row; UTF-8 (with or without a BOM) or the Windows Excel encoding; quotes, doubled quotes and line breaks inside quotes. At most **10,000 rows** and **20 MB** per import: split bigger files.
+- **Dates must be written year first**: `2026-03-04` or `2026-03-04 10:20:30` (a `T` between them is fine). `04/03/2026` is refused by name, because PostgreSQL and SQL Server quietly read it as 3 April, so a file that mixes layouts would import half wrong with no error.
+- **Everything else is text the database converts** (`12.50` into a decimal column, `abc` into an integer column is refused). Empty values become NULL (untick to keep them as empty text). MySQL wants `1`/`0` for a yes/no column; PostgreSQL and SQL Server also take `true`/`false`.
+- Column names in the file are never put into SQL: only columns that really exist in the table can be filled.
+- Speed: roughly 2,000 rows in 1 to 4 seconds on a local database, so a full 10,000-row file takes up to about 20 seconds. Over a slow network it takes longer.
+- A check on a table with an auto-numbered key can use up some of the numbers, because databases don't give those back after a rollback.
 
 ---
 

@@ -1,3 +1,4 @@
+import contextlib
 from abc import ABC, abstractmethod
 import re
 from decimal import Decimal
@@ -361,17 +362,21 @@ class BaseConnector(ABC):
             return (True, 'Row was already gone') if not ok and self.last_rowcount == 0 else (ok, msg)
         return False, f'Unknown operation: {kind!r}'
 
-    def apply_batch(self, table: str, operations: List[dict], database: Optional[str] = None, force: bool = False) -> Dict[str, Any]:
+    def apply_batch(self, table: str, operations: List[dict], database: Optional[str] = None, force: bool = False,
+                    dry_run: bool = False) -> Dict[str, Any]:
         """Apply inserts, updates and deletes as one unit.
 
         With a transactional database it is all or nothing: the edited rows are locked and checked first (every stale
         row is reported at once), then everything is applied and committed together, or rolled back if anything fails.
         Otherwise the operations run in order and the result says exactly how many were applied before a failure.
-        `force=True` skips the stale-row check.
+        `force=True` skips the stale-row check. `dry_run=True` applies everything and then rolls it back, to find out
+        whether it would work (transactional databases only).
         """
         if not operations:
             return {'success': True, 'applied': 0, 'results': []}
 
+        if dry_run and not self.SUPPORTS_TRANSACTIONS:
+            return {'success': False, 'rolled_back': False, 'applied': 0, 'error': 'A check without saving needs a database that can roll back.'}
         if not self.SUPPORTS_TRANSACTIONS:
             results = []
             for i, op in enumerate(operations):
@@ -400,8 +405,8 @@ class BaseConnector(ABC):
                     self._end_tx(False)
                     return {'success': False, 'failed_at': i, 'error': msg, 'rolled_back': True, 'applied': 0}
                 results.append(msg)
-            self._end_tx(True)
-            return {'success': True, 'applied': len(operations), 'results': results}
+            self._end_tx(not dry_run)
+            return {'success': True, 'applied': len(operations), 'results': results, 'dry_run': dry_run}
         except Exception as e:
             if started:
                 try:
@@ -411,6 +416,10 @@ class BaseConnector(ABC):
             return {'success': False, 'error': str(e), 'rolled_back': True, 'applied': 0}
         finally:
             self._batch = False
+
+    def import_session(self):
+        """A context manager around a CSV import. The default does nothing; Oracle uses it to accept ISO dates."""
+        return contextlib.nullcontext()
 
     # ---- column insights -------------------------------------------------------------------------------
 

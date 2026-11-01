@@ -188,6 +188,24 @@ def screens(pg):
     yield 'the name prompt with its error'
     pg.keyboard.press('Escape')
     pg.wait_for_selector('.app-dialog', state='detached')
+    import os, tempfile
+    folder = tempfile.mkdtemp()
+    open_table(pg, 'orders')
+    for label, text, check in [('the CSV import dialog with an error', 'id,status,total\n9001,paid,5\n1,paid,7\n', True),
+                               ('the CSV import dialog with warnings', 'order status,amount\npaid,5\nlate\n', False)]:
+        path = os.path.join(folder, 'people.csv')
+        with open(path, 'w') as f:
+            f.write(text)
+        with pg.expect_file_chooser() as chooser:
+            pg.click('.tab-content.active [data-action=import-csv]')
+        chooser.value.set_files(path)
+        pg.wait_for_selector('#import-modal.active .import-mapping')
+        if check:
+            pg.click('#import-check')
+            pg.wait_for_selector('#import-status.error')
+        yield label
+        pg.click('#import-cancel')
+        pg.wait_for_selector('#import-modal.active', state='hidden')
     pg.click('#new-query-tab-btn')
     pg.wait_for_selector('.tab-content.active .CodeMirror')
     pg.evaluate("document.querySelector('.tab-content.active .CodeMirror').CodeMirror.setValue('drop table customers')")

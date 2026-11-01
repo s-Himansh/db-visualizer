@@ -27,6 +27,7 @@ class DatabaseVisualizer {
         }
         Theme.init();
         this.savedQueries = new SavedQueries();
+        this.csvImporter = new CsvImporter();
         this.relations = new RelationsManager();
         this.palette = new CommandPalette();
         this.insights = new ColumnInsights();
