@@ -111,7 +111,9 @@ def test_the_request_is_a_plain_minimal_messages_call(client, fake, shop):
     enable(client)
     ask(client, shop)
     req = fake.last
-    assert req['path'] == '/v1/messages' and req['headers']['x-api-key'] == 'sk-ant-test-key-123'
+    # older SDKs send the key as x-api-key, 2.x as a Bearer token
+    h = req['headers']
+    assert req['path'] == '/v1/messages' and 'sk-ant-test-key-123' in (h.get('x-api-key') or h.get('authorization') or '')
     assert req['body']['model'] == ai_assistant.MODEL and set(req['body']) == {'model', 'max_tokens', 'system', 'messages'}
     assert req['body']['messages'][0]['role'] == 'user'
 
