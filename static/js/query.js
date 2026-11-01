@@ -163,7 +163,7 @@ class QueryEditor {
                         </div>
                     </div>
                     <div class="modal-body">
-                        <textarea id="json-editor" style="width: 100%; height: 60vh; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 4px; padding: 15px; color: #ddd; font-family: 'SF Mono', 'Consolas', 'Monaco', monospace; font-size: 13px; line-height: 1.5; resize: vertical;"></textarea>
+                        <textarea id="json-editor" style="width: 100%; height: 60vh; background: var(--ink); border: 1px solid var(--line-strong); border-radius: 4px; padding: 15px; color: var(--text); font-family: 'SF Mono', 'Consolas', 'Monaco', monospace; font-size: 13px; line-height: 1.5; resize: vertical;"></textarea>
                     </div>
                 </div>
             `;
@@ -181,7 +181,7 @@ class QueryEditor {
                     const btn = modal.querySelector('#copy-json-btn');
                     const originalText = btn.textContent;
                     btn.textContent = '✓ Copied!';
-                    btn.style.backgroundColor = '#28a745';
+                    btn.style.backgroundColor = 'var(--ok)';
                     setTimeout(() => {
                         btn.textContent = originalText;
                         btn.style.backgroundColor = '';

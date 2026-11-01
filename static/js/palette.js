@@ -62,6 +62,9 @@ class CommandPalette {
                 else { document.getElementById('new-query-tab-btn').click(); setTimeout(() => { const t = tm.tabs.get(tm.activeTabId); if (t) app.assistant.toggle(t); }, 250); }
             }, !!active],
             ['SQL assistant settings', 'API key and what is sent', () => app.assistant.openSettings(), true],
+            ['Theme: follow the system', 'light or dark, as your computer is set', () => Theme.set('system'), Theme.preference !== 'system'],
+            ['Theme: light', 'bright background', () => Theme.set('light'), Theme.preference !== 'light'],
+            ['Theme: dark', 'dark background', () => Theme.set('dark'), Theme.preference !== 'dark'],
             ['Open the sample database', 'a small online shop to explore', () => app.openSample(), true],
             ['New connection', 'add a database', () => cm.showConnectionModal(), true],
             ['Manage connections', 'edit, connect or delete', () => cm.showConnectionsManager(), true],

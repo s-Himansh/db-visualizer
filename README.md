@@ -101,7 +101,7 @@ Describe a query in plain English and Claude writes it into the editor. It only 
 </tr>
 </table>
 
-Also in the box: SSH tunnels, read-only connections, a query editor with autocomplete, a data grid with search, sorting and paging, a schema viewer, CSV/JSON export, query history, and a dark theme.
+Also in the box: SSH tunnels, read-only connections, a query editor with autocomplete, a data grid with search, sorting and paging, a schema viewer, CSV/JSON export, query history, and **light and dark themes**: the button in the top bar cycles *System* (follows your computer), *Light* and *Dark*, and your choice is remembered.
 
 ---
 

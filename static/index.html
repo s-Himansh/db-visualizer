@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Database Visualizer</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%2312161b'/%3E%3Cpath d='M3 4.5h10M3 8h10M3 11.5h10M6.5 4v8' stroke='%233fb8a5' stroke-width='1.4' fill='none'/%3E%3C/svg%3E">
-    <link rel="stylesheet" href="/static/css/styles.css?v=20261029a">
-    <link rel="stylesheet" href="/static/css/theme.css?v=20261029a">
+    <link rel="stylesheet" href="/static/css/styles.css?v=20261101a">
+    <link rel="stylesheet" href="/static/css/theme.css?v=20261101a">
     <link rel="stylesheet" href="/static/lib/codemirror/codemirror.min.css">
     <link rel="stylesheet" href="/static/lib/codemirror/theme/monokai.min.css">
     <link rel="stylesheet" href="/static/lib/codemirror/addon/hint/show-hint.min.css">
@@ -53,6 +53,7 @@
                     <span class="connection-status" id="connection-status">Not Connected</span>
                 </div>
                 <div class="toolbar-right">
+                    <button class="btn btn-sm" id="theme-btn" title="Colour theme: follow the system, light or dark"></button>
                     <button class="btn btn-sm" id="palette-btn" title="Jump to a table, connection or action">Jump to <kbd>⌘K</kbd></button>
                 </div>
             </div>
@@ -313,14 +314,15 @@
     <script src="/static/lib/codemirror/addon/hint/anyword-hint.min.js"></script>
     <script src="/static/lib/codemirror/addon/hint/javascript-hint.min.js"></script>
 
-    <script src="/static/js/ui.js?v=20261029a"></script>
-    <script src="/static/js/insights.js?v=20261029a"></script>
-    <script src="/static/js/assistant.js?v=20261029a"></script>
-    <script src="/static/js/relations.js?v=20261029a"></script>
-    <script src="/static/js/connection.js?v=20261029a"></script>
-    <script src="/static/js/query.js?v=20261029a"></script>
-    <script src="/static/js/tabs.js?v=20261029a"></script>
-    <script src="/static/js/palette.js?v=20261029a"></script>
-    <script src="/static/js/app.js?v=20261029a"></script>
+    <script src="/static/js/theme.js?v=20261101a"></script>
+    <script src="/static/js/ui.js?v=20261101a"></script>
+    <script src="/static/js/insights.js?v=20261101a"></script>
+    <script src="/static/js/assistant.js?v=20261101a"></script>
+    <script src="/static/js/relations.js?v=20261101a"></script>
+    <script src="/static/js/connection.js?v=20261101a"></script>
+    <script src="/static/js/query.js?v=20261101a"></script>
+    <script src="/static/js/tabs.js?v=20261101a"></script>
+    <script src="/static/js/palette.js?v=20261101a"></script>
+    <script src="/static/js/app.js?v=20261101a"></script>
 </body>
 </html>
