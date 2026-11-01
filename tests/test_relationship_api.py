@@ -299,3 +299,20 @@ def test_names_with_quotes_and_spaces_cannot_break_the_check(client, tmp_path):
     assert body['success'] is True and body['examined'] >= 0        # it ran, and did not fall over
     # the hint "weirdparentsid" needs a column of that name on a table named for the parent: the point is no error and no injection
     assert sqlite3.connect(path).execute('select count(*) from "we""ird parents"').fetchone() == (11,)
+
+
+# ---- the sample shop is there to show this off ---------------------------------------------------------------------------------
+
+def test_the_sample_shop_shows_the_feature_including_a_correct_no(client, tmp_path):
+    from sample_data import build_sample
+    path = str(build_sample(tmp_path / 'shop.db'))
+    cid = client.post('/api/connections', json={'name': 'sample', 'type': 'sqlite', 'database': path}).get_json()['id']
+    client.post('/api/connect', json={'id': cid})
+    got = found(inferred(client, cid, path))
+    assert set(got) == {('support_tickets', 'customer_id'), ('support_tickets', 'order_id'), ('wishlists', 'customer_id'),
+                        ('wishlists', 'product_id'), ('coupon_redemptions', 'order_id')}
+    assert got[('coupon_redemptions', 'order_id')]['orphans'] == 8 and got[('coupon_redemptions', 'order_id')]['confidence'] == 'low'
+    assert got[('support_tickets', 'customer_id')]['confidence'] == 'high'
+    assert not any(table == 'affiliate_clicks' for table, _ in got)           # the name fits, the data does not: the app says no
+    declared = {(r['table'], r['column']) for r in relations(client, cid, path)}
+    assert ('orders', 'customer_id') in declared and not declared & set(got)  # the shop's own keys are real; the add-ons are not

@@ -114,3 +114,10 @@ def test_unknown_environments_are_rejected_on_create_and_update(client):
     assert client.post('/api/connections', json={'name': 'x', 'type': 'mysql', 'environment': 'prod!'}).status_code == 400
     cid = client.post('/api/connections', json={'name': 'x', 'type': 'mysql'}).get_json()['id']
     assert client.put(f'/api/connections/{cid}', json={'environment': '<script>'}).status_code == 400
+
+
+def test_the_addon_tables_have_undeclared_links_for_the_relationship_finder(sample_db):
+    for table in ('support_tickets', 'wishlists', 'coupon_redemptions', 'affiliate_clicks'):
+        assert rows(sample_db, f'PRAGMA foreign_key_list({table})') == []                  # nothing declared
+    assert rows(sample_db, 'SELECT COUNT(*) FROM coupon_redemptions WHERE order_id NOT IN (SELECT id FROM orders)')[0][0] > 0   # some orphans
+    assert rows(sample_db, 'SELECT COUNT(*) FROM affiliate_clicks WHERE customer_id IN (SELECT id FROM customers)') == [(0,)]  # a partner's ids

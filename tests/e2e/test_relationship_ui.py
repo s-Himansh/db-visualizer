@@ -218,3 +218,34 @@ def test_table_and_column_names_stay_plain_text(page, tmp_path):
     assert page.locator('.tab-content.active .map-suggest img').count() == 0
     assert parent in page.inner_text('.tab-content.active .map-suggest-title')
     assert page.evaluate('window.__pwned') is None
+
+
+# ---- the sample shop is the place to try it --------------------------------------------------------------------------------------------
+
+def test_the_sample_shop_walks_through_the_whole_feature(page):
+    page.click('#welcome-sample')
+    page.wait_for_selector('#tables-content .tree-item', timeout=15000)
+    open_map(page)
+    # the shop's own keys are drawn; the four add-on tables are left out because nothing declares their links
+    assert page.locator('.tab-content.active .map-node').count() == 7
+    loose_chips = page.locator('.tab-content.active .map-loose .map-chip').all_inner_texts()
+    assert {'support_tickets', 'wishlists', 'coupon_redemptions', 'affiliate_clicks'} <= set(loose_chips)
+
+    find(page)
+    got = items(page)
+    assert set(got) == {'support_tickets.customer_id', 'support_tickets.order_id', 'wishlists.customer_id', 'wishlists.product_id', 'coupon_redemptions.order_id'}
+    assert 'affiliate_clicks.customer_id' not in got                                     # the name fits, the data does not
+    assert 'point' in got['coupon_redemptions.order_id']['evidence'] and got['coupon_redemptions.order_id']['confidence'] == 'low'
+
+    decide(page, 'support_tickets.customer_id', 'accept')
+    page.wait_for_selector('.tab-content.active .map-edge.is-inferred', state='attached')
+    assert page.locator('.tab-content.active .map-node').count() == 8                    # support_tickets joined the map
+    assert '1 inferred' in page.inner_text('.tab-content.active .map-info')
+
+    page.locator('.tab-content.active .map-node[data-table="support_tickets"]').click()
+    page.wait_for_selector('.tab-content.active td.fk[data-column=customer_id]')
+    assert page.locator('.tab-content.active td.fk[data-column=order_id]').count() == 0   # not accepted, so no arrow
+    cell = page.locator('.tab-content.active td[data-column=customer_id].fk').first
+    box = cell.bounding_box()
+    cell.click(position={'x': box['width'] - 10, 'y': box['height'] / 2})
+    page.wait_for_function("document.querySelector('#tabs-header .tab.active .tab-label').textContent.startsWith('customers')")

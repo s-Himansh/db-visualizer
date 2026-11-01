@@ -72,6 +72,8 @@
     --lg-json-key: #9cdcfe;
     --lg-json-number: #b5cea8;
     --cm-text: #f8f8f2; --cm-variable-2: #9effff; --cm-type: #66d9ef; --cm-def: #fd971f; --cm-property: #a6e22e;
+    --lg-row-hover: #2d2d2d;
+    --lg-json-bool: #569cd6;
     --radius: 6px;
     --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
     --font-data: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
@@ -882,6 +884,8 @@ body[data-env="production"] .status-bar::after { content: 'PRODUCTION'; margin-l
     --lg-json-key: #0b5ec2;
     --lg-json-number: #0a7a45;
     --cm-text: #29323d; --cm-variable-2: #0a6a78; --cm-type: #0b6b9a; --cm-def: #a65800; --cm-property: #4d7000;
+    --lg-row-hover: #e8ecf1;
+    --lg-json-bool: #0b5ec2;
     color-scheme: light;
 }
 
@@ -953,3 +957,6 @@ body[data-env="production"] .status-bar::after { content: 'PRODUCTION'; margin-l
 .map-suggest-decided { margin-top: 10px; font-size: 12px; }
 .map-suggest-decided summary { cursor: pointer; color: var(--muted); }
 .map-suggest-decided-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0 4px 14px; }
+
+/* the map's own header text is longer than the 38 characters other toolbars allow ("12 tables, 11 relationships (2 inferred)") */
+.map-container .table-toolbar .map-info { max-width: none; overflow: visible; text-overflow: clip; }

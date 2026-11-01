@@ -29,7 +29,7 @@ A desktop app for browsing and editing SQL and NoSQL databases, with guard rails
 ./run.sh
 ```
 
-No database handy? Click **Try a sample database** on the first screen. It opens a small online shop you can't hurt.
+No database handy? Click **Try a sample database** on the first screen. It opens a small online shop you can't hurt. It includes four add-on tables whose links to the rest of the shop are *not* declared, so you can try **Find missing relationships** on the Schema map and see what it finds, and what it refuses.
 
 <details>
 <summary><b>Install by hand</b> (if you don't want the script)</summary>

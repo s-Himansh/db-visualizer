@@ -271,3 +271,45 @@ def test_production_banner_and_environment_colours_are_readable_in_light(connect
     use(connected, 'light')
     found = {'production': audit(connected)} if audit(connected) else {}
     assert not found, report(found)
+
+
+# ---- states a scan of the page at rest never sees ---------------------------------------------------------------------------------
+
+LUMINANCE = """(el) => { const c = getComputedStyle(el); const m = c.backgroundColor.match(/rgba?\\(([^)]+)\\)/); const p = m[1].split(/[ ,\\/]+/).filter(Boolean).map(Number);
+  const f = v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); };
+  return {lum: .2126 * f(p[0]) + .7152 * f(p[1]) + .0722 * f(p[2]), alpha: p.length > 3 ? p[3] : 1, color: c.backgroundColor}; }"""
+
+
+def look(pg, selector):
+    return pg.eval_on_selector(selector, LUMINANCE)
+
+
+def test_hovering_a_grid_row_does_not_turn_it_dark_in_light(connected):
+    use(connected, 'light')
+    open_table(connected, 'customers')
+    connected.hover('.tab-content.active .data-table tbody tr:nth-child(3)')
+    connected.wait_for_timeout(250)
+    seen = look(connected, '.tab-content.active .data-table tbody tr:nth-child(3)')
+    assert seen['lum'] > 0.6, f"a hovered row is {seen['color']}"
+    use(connected, 'dark')
+    connected.hover('.tab-content.active .data-table tbody tr:nth-child(4)')
+    connected.wait_for_timeout(250)
+    assert look(connected, '.tab-content.active .data-table tbody tr:nth-child(4)')['lum'] < 0.1       # and still dark in dark
+
+
+def test_hovering_a_button_and_focusing_a_field_stay_light_in_light(connected):
+    use(connected, 'light')
+    connected.hover('#new-query-tab-btn')
+    connected.wait_for_timeout(250)
+    assert look(connected, '#new-query-tab-btn')['lum'] > 0.35
+    connected.click('#manage-connections-btn')
+    connected.click('#new-connection-btn-manager')
+    connected.focus('input[name=name]')
+    connected.wait_for_timeout(250)
+    assert look(connected, 'input[name=name]')['lum'] > 0.8
+
+
+def test_json_values_are_readable_in_light(connected):
+    use(connected, 'light')
+    open_table(connected, 'customers')
+    assert audit(connected, 3.0) == []
