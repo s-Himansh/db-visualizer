@@ -1732,7 +1732,7 @@ class TabManager {
                         <button class="btn btn-sm" id="json-copy-btn">Copy</button>
                         <input type="text" id="json-search-input" placeholder="Search JSON..." class="form-control" style="flex: 1;">
                     </div>
-                    <div id="json-editor-container" style="height: 400px; border: 1px solid #3a3a3a;"></div>
+                    <div id="json-editor-container" style="height: 400px; border: 1px solid var(--line-strong);"></div>
                     <div class="form-actions" style="margin-top: 16px;">
                         <button class="btn btn-primary" id="json-save-btn">Save Changes</button>
                         <button class="btn" id="json-cancel-btn">Cancel</button>

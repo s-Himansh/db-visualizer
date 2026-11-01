@@ -25,6 +25,7 @@ class DatabaseVisualizer {
         if (typeof TabManager !== 'undefined') {
             this.tabManager = new TabManager();
         }
+        Theme.init();
         this.relations = new RelationsManager();
         this.palette = new CommandPalette();
         this.insights = new ColumnInsights();

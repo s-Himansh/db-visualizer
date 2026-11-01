@@ -484,12 +484,16 @@ def handle_error(e):
 
 @app.route('/')
 def index():
-    """Serve the main page with the per-launch API token attached to every fetch."""
+    """Serve the main page with the per-launch API token attached to every fetch, and the saved theme applied
+    before the first paint so there is no flash of the wrong one."""
     html = (STATIC_DIR / 'index.html').read_text(encoding='utf-8')
+    theme = ('(function(){var p=%s,r=document.documentElement;r.dataset.themePref=p;'
+             "r.dataset.theme=p==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):p;})();"
+             % json.dumps(saved_theme()))
     bootstrap = (
         '<script>(function(){var t=%s,f=window.fetch;window.fetch=function(u,o){o=o||{};'
         "if(typeof u==='string'&&u.charAt(0)==='/'){o.headers=Object.assign({},o.headers,{'X-DBV-Token':t});}"
-        'return f.call(this,u,o);};})();</script>' % json.dumps(APP_TOKEN))
+        'return f.call(this,u,o);};})();%s</script>' % (json.dumps(APP_TOKEN), theme))
     return Response(html.replace('<head>', '<head>' + bootstrap, 1), mimetype='text/html')
 
 
@@ -522,6 +526,31 @@ def save_settings(settings: dict):
     with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), 'w') as f:
         json.dump(settings, f, indent=2)
     os.replace(tmp, SETTINGS_FILE)
+
+
+THEMES = ('system', 'light', 'dark')
+
+
+def saved_theme() -> str:
+    theme = load_settings().get('theme')
+    return theme if theme in THEMES else 'system'
+
+
+@app.route('/api/theme', methods=['GET'])
+def get_theme():
+    return jsonify({'success': True, 'theme': saved_theme()})
+
+
+@app.route('/api/theme', methods=['PUT'])
+def put_theme():
+    """Remember the theme: system (follow the operating system), light or dark."""
+    theme = (request.get_json(silent=True) or {}).get('theme')
+    if theme not in THEMES:
+        return jsonify({'success': False, 'error': 'Theme must be system, light or dark.'}), 400
+    settings = load_settings()
+    settings['theme'] = theme
+    save_settings(settings)
+    return jsonify({'success': True, 'theme': theme})
 
 
 def ai_api_key() -> Optional[str]:
