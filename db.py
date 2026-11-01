@@ -31,6 +31,7 @@ from db_connectors import safety
 from sample_data import build_sample
 import ai_assistant
 import csv_import
+import relationship_inference
 from db_connectors.tunnel import KnownHosts, SSHError, SSHTunnel, UnknownHostKey
 
 
@@ -871,6 +872,7 @@ def delete_connection(connection_id):
         del active_connections[connection_id]
 
     shutil.rmtree(CERTS_DIR / connection_id, ignore_errors=True)
+    forget_relationship_decisions(connection_id)
 
     if save_connections(connections):
         return jsonify({'success': True})
@@ -1041,19 +1043,153 @@ def get_columns():
         return error_response(e)
 
 
+# ---- relationships the user has decided about: accepted ones count as foreign keys, ignored ones are not suggested again ----
+
+RELATION_DECISIONS_FILE = CONFIG_DIR / 'relationship_decisions.json'
+RELATION_DECISIONS_LOCK = threading.Lock()
+RELATION_FIELDS = ('table', 'column', 'referenced_table', 'referenced_column')
+
+
+def load_relationship_decisions() -> dict:
+    try:
+        data = json.loads(RELATION_DECISIONS_FILE.read_text(encoding='utf-8'))
+        return data if isinstance(data, dict) else {}
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError):
+        try:
+            shutil.copy2(RELATION_DECISIONS_FILE, RELATION_DECISIONS_FILE.with_suffix('.corrupt.json'))
+        except OSError:
+            pass
+        return {}
+
+
+def write_relationship_decisions(data: dict):
+    tmp = RELATION_DECISIONS_FILE.with_suffix('.tmp')
+    with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2)
+    os.replace(tmp, RELATION_DECISIONS_FILE)
+
+
+def relationship_decisions(connection_id: str, database: Optional[str]) -> Dict[str, list]:
+    """{'accepted': [...], 'ignored': [...]} for one connection and database, as stored."""
+    with RELATION_DECISIONS_LOCK:
+        mine = load_relationship_decisions().get(connection_id)
+        mine = mine.get(database or '') if isinstance(mine, dict) else None
+    mine = mine if isinstance(mine, dict) else {}       # a hand-edited or damaged file must not break the schema map
+    clean = lambda items: [r for r in (items if isinstance(items, list) else [])
+                           if isinstance(r, dict) and all(isinstance(r.get(f), str) for f in RELATION_FIELDS)]
+    return {'accepted': clean(mine.get('accepted')), 'ignored': clean(mine.get('ignored'))}
+
+
+def forget_relationship_decisions(connection_id: str):
+    with RELATION_DECISIONS_LOCK:
+        data = load_relationship_decisions()
+        if data.pop(connection_id, None) is not None:
+            write_relationship_decisions(data)
+
+
+def clean_relation(raw) -> Optional[Dict[str, str]]:
+    if not isinstance(raw, dict) or not all(isinstance(raw.get(f), str) and raw[f].strip() for f in RELATION_FIELDS):
+        return None
+    return {f: raw[f] for f in RELATION_FIELDS}
+
+
+def same_relation(a: dict, b: dict) -> bool:
+    return all(a.get(f) == b.get(f) for f in ('table', 'column'))
+
+
 @app.route('/api/relations', methods=['GET'])
 def get_relations():
-    """Tables and the foreign keys between them, for the schema map and for following links in the grid."""
+    """Tables and the foreign keys between them, for the schema map and for following links in the grid.
+    Relationships the user accepted are included, marked `virtual`, and behave like declared keys."""
     connection_id = request.args.get('connection_id')
     connector = get_connector(connection_id)
     if not connector:
         return jsonify({'success': False, 'error': 'Not connected'}), 400
     database = request.args.get('database')
     try:
-        return jsonify({'success': True, 'tables': connector.get_tables(database),
-                        'relations': connector.get_relations(database)})
+        tables = connector.get_tables(database)
+        relations = connector.get_relations(database)
+        names = {t['name'] for t in tables}
+        declared = {(r['table'], r['column']) for r in relations}
+        for accepted in relationship_decisions(connection_id, database)['accepted']:
+            if accepted['table'] in names and accepted['referenced_table'] in names and (accepted['table'], accepted['column']) not in declared:
+                relations.append({**{f: accepted[f] for f in RELATION_FIELDS}, 'virtual': True})
+        return jsonify({'success': True, 'tables': tables, 'relations': relations})
     except Exception as e:
         return error_response(e)
+
+
+@app.route('/api/relations/inferred', methods=['GET'])
+def inferred_relations():
+    """Relationships the database has but never declared, found from column names and checked against the data."""
+    connection_id = request.args.get('connection_id')
+    connector = get_connector(connection_id)
+    if not connector:
+        return jsonify({'success': False, 'error': 'Not connected'}), 400
+    if not connector.SUPPORTS_PROFILE:
+        return jsonify({'success': False, 'error': 'Finding relationships works with SQL databases.'}), 400
+    database = request.args.get('database')
+    decided = relationship_decisions(connection_id, database)
+    started = time.time()
+    try:
+        found = relationship_inference.infer(connector, database, connector.get_relations(database), decided['accepted'] + decided['ignored'])
+    except Exception as e:
+        return error_response(e)
+    found['seconds'] = round(time.time() - started, 1)
+    found['ignored'] = len(decided['ignored'])
+    return jsonify({'success': True, **found})
+
+
+@app.route('/api/relations/decisions', methods=['GET'])
+def list_relation_decisions():
+    """What the user has accepted (with the evidence it was accepted on) and ignored, so either can be undone."""
+    connection_id = request.args.get('connection_id')
+    if not get_connector(connection_id):
+        return jsonify({'success': False, 'error': 'Not connected'}), 400
+    decided = relationship_decisions(connection_id, request.args.get('database') or None)
+    return jsonify({'success': True, **decided})
+
+
+@app.route('/api/relations/decision', methods=['POST'])
+def decide_relation():
+    """Accept a suggested relationship (it then works like a foreign key), ignore it (never suggest it again), or
+    forget an earlier decision."""
+    data = request.get_json(silent=True) or {}
+    connection_id, action = data.get('connection_id'), data.get('action')
+    relation = clean_relation(data.get('relation'))
+    if action not in ('accept', 'ignore', 'forget') or not relation:
+        return jsonify({'success': False, 'error': 'Say which relationship, and accept, ignore or forget.'}), 400
+    connector = get_connector(connection_id)
+    if not connector:
+        return jsonify({'success': False, 'error': 'Not connected'}), 400
+    database = data.get('database') or None
+    try:
+        columns = connector.get_columns(database)
+    except Exception as e:
+        return error_response(e)
+    if action != 'forget' and (relation['column'] not in columns.get(relation['table'], [])
+                               or relation['referenced_column'] not in columns.get(relation['referenced_table'], [])):
+        return jsonify({'success': False, 'error': 'That table or column does not exist.'}), 400
+    evidence = data.get('evidence') if isinstance(data.get('evidence'), dict) else {}
+    with RELATION_DECISIONS_LOCK:
+        everything = load_relationship_decisions()
+        if not isinstance(everything.get(connection_id), dict):
+            everything[connection_id] = {}
+        if not isinstance(everything[connection_id].get(database or ''), dict):
+            everything[connection_id][database or ''] = {}
+        mine = everything[connection_id][database or '']
+        for bucket in ('accepted', 'ignored'):
+            current = mine.get(bucket) if isinstance(mine.get(bucket), list) else []
+            mine[bucket] = [r for r in current if isinstance(r, dict) and not same_relation(r, relation)]
+        if action == 'accept':
+            mine['accepted'].append({**relation, 'evidence': {k: evidence[k] for k in ('distinct', 'matched', 'containment', 'confidence')
+                                                              if k in evidence}, 'accepted_at': datetime.now().isoformat(timespec='seconds')})
+        elif action == 'ignore':
+            mine['ignored'].append(relation)
+        write_relationship_decisions(everything)
+    return jsonify({'success': True})
 
 
 PROFILE_SAMPLE_THRESHOLD = 1_000_000   # above this many rows (by the catalog's estimate) insights read a sample instead

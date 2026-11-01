@@ -237,6 +237,12 @@ class RelationsManager {
             return;
         }
 
+        const findButton = root.querySelector('[data-map=find]');
+        findButton.onclick = () => window.app.relationshipFinder.toggle(tab);
+        findButton.disabled = !['sqlite', 'mysql', 'postgresql', 'sqlserver', 'oracle'].includes(
+            (window.app.connectionManager.connections.find(c => c.id === tab.connectionId) || {}).type);
+        root.querySelector('[data-map=refresh]').onclick = () => this.renderMap(tab);
+
         const { nodes, width, height } = RelationsManager.layout(data.relations);
         const NS = 'http://www.w3.org/2000/svg';
         const el = (name, attrs = {}, parent) => {
@@ -248,7 +254,9 @@ class RelationsManager {
 
         const linked = new Set(nodes.keys());
         const unlinked = data.tables.filter(t => !linked.has(t.name));
-        info.textContent = `${data.tables.length} tables, ${data.relations.length} relationship${data.relations.length === 1 ? '' : 's'}`;
+        const inferred = data.relations.filter(r => r.virtual).length;
+        info.textContent = `${data.tables.length} tables, ${data.relations.length} relationship${data.relations.length === 1 ? '' : 's'}` +
+            (inferred ? ` (${inferred} inferred)` : '');
         loose.innerHTML = '';
         if (unlinked.length) {
             const label = document.createElement('span');
@@ -269,7 +277,11 @@ class RelationsManager {
         if (!linked.size) {
             canvas.innerHTML = '<div class="map-empty"><strong>No foreign keys found.</strong><br>' +
                 'This database does not declare relationships between its tables, so there is nothing to draw. ' +
-                'Its tables are listed below.</div>';
+                'Its tables are listed below.<br><br>Tables often point at each other anyway. ' +
+                '<button class="btn btn-sm btn-primary" data-map="find-empty" type="button">Find missing relationships</button></div>';
+            const cta = canvas.querySelector('[data-map=find-empty]');
+            cta.disabled = findButton.disabled;
+            cta.onclick = () => window.app.relationshipFinder.open(tab);
             return;
         }
 
@@ -293,8 +305,9 @@ class RelationsManager {
         for (const r of ordered) {
             const child = nodes.get(r.table), parent = nodes.get(r.referenced_table);
             const d = RelationsManager.route(child, parent, rowY(child, r.column), rowY(parent, r.referenced_column), frame);
-            const path = el('path', { d, class: 'map-edge', 'marker-end': `url(#arrow-${tab.id})` }, edgeLayer);
-            el('title', {}, path).textContent = `${r.table}.${r.column} → ${r.referenced_table}.${r.referenced_column}`;
+            const path = el('path', { d, class: r.virtual ? 'map-edge is-inferred' : 'map-edge', 'marker-end': `url(#arrow-${tab.id})` }, edgeLayer);
+            el('title', {}, path).textContent = `${r.table}.${r.column} → ${r.referenced_table}.${r.referenced_column}` +
+                (r.virtual ? ' (inferred from the data, accepted by you)' : '');
             edges.push({ path, from: r.table, to: r.referenced_table });
         }
 
@@ -383,7 +396,6 @@ class RelationsManager {
         root.querySelector('[data-map=fit]').onclick = fit;
         root.querySelector('[data-map=zoom-in]').onclick = () => zoomAt(1.25, box.width / 2, box.height / 2);
         root.querySelector('[data-map=zoom-out]').onclick = () => zoomAt(0.8, box.width / 2, box.height / 2);
-        root.querySelector('[data-map=refresh]').onclick = () => this.renderMap(tab);
 
         const search = root.querySelector('.map-search');
         const doSearch = () => {

@@ -929,3 +929,27 @@ body[data-env="production"] .status-bar::after { content: 'PRODUCTION'; margin-l
 .import-sample-table th { background: var(--panel); color: var(--muted); font-weight: 500; }
 .import-sample-table .import-null { color: var(--faint); font-style: italic; }
 #import-body + .import-status { margin-top: 12px; }
+
+/* ---------- finding missing relationships ---------- */
+.map-edge.is-inferred { stroke-dasharray: 6 4; }
+.map-suggest { max-height: 42%; overflow: auto; padding: 10px 14px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.map-suggest-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.map-suggest-summary { color: var(--muted); font-size: 12px; flex: 1; }
+.map-suggest-head .btn { margin-left: auto; }
+.map-suggest-note { color: var(--muted); font-size: 12px; margin: 8px 0 0; line-height: 1.5; }
+.map-suggest-warning, .map-suggest-error { padding: 8px 12px; border-radius: var(--radius); margin: 6px 0; border: 1px solid var(--pending-border); background: var(--pending-wash); }
+.map-suggest-error { border-color: var(--danger-border); background: var(--danger-wash); }
+.map-suggest-list { display: flex; flex-direction: column; gap: 6px; }
+.map-suggest-item { display: flex; align-items: center; gap: 12px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.map-suggest-main { flex: 1; min-width: 0; }
+.map-suggest-title { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.map-suggest-name { font-family: var(--font-data); color: var(--text-strong); }
+.map-suggest-evidence { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.map-suggest-confidence { margin-left: 6px; padding: 0 7px; border-radius: 999px; font-size: 10.5px; border: 1px solid var(--line-strong); color: var(--muted); }
+.map-suggest-confidence.high { border-color: var(--ok-border); color: var(--ok); }
+.map-suggest-confidence.medium { border-color: var(--accent-border); color: var(--accent); }
+.map-suggest-confidence.low { border-color: var(--pending-border); color: var(--pending); }
+.map-suggest-actions { display: flex; gap: 6px; }
+.map-suggest-decided { margin-top: 10px; font-size: 12px; }
+.map-suggest-decided summary { cursor: pointer; color: var(--muted); }
+.map-suggest-decided-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0 4px 14px; }

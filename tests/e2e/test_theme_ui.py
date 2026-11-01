@@ -188,6 +188,24 @@ def screens(pg):
     yield 'the name prompt with its error'
     pg.keyboard.press('Escape')
     pg.wait_for_selector('.app-dialog', state='detached')
+    import sqlite3
+    c = sqlite3.connect(pg.demo_db)
+    c.execute('create table audit_log(id integer primary key, order_id integer, note text)')
+    c.executemany('insert into audit_log values(?,?,?)', [(i, i, 'checked') for i in range(1, 60)])
+    c.commit()
+    c.close()
+    pg.click('#refresh-btn')
+    pg.wait_for_selector('#tables-content .tree-label:text-is("audit_log")')
+    pg.click('#open-map-btn')
+    pg.wait_for_selector('.tab-content.active .map-svg[data-ready]')
+    pg.click('.tab-content.active [data-map=find]')
+    pg.wait_for_selector('.tab-content.active .map-suggest-item')
+    yield 'relationship suggestions'
+    pg.click('.tab-content.active .map-suggest-item [data-act=accept]')
+    pg.wait_for_selector('.tab-content.active .map-edge.is-inferred', state='attached')
+    pg.wait_for_selector('.tab-content.active .map-suggest-decided')
+    pg.click('.tab-content.active .map-suggest-decided summary')
+    yield 'an accepted inferred relationship'
     import os, tempfile
     folder = tempfile.mkdtemp()
     open_table(pg, 'orders')
