@@ -4,6 +4,23 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 
+def as_shown(value) -> str:
+    """A value as the data grid displays it (and so as it is remembered when a cell is edited).
+
+    The grid reads JSON, so the same conversions apply: NULL is empty, booleans are true/false, and a whole-number
+    float has no ".0". The stale-edit check compares these strings, so the two sides must agree exactly.
+    """
+    if value is None:
+        return ''
+    if isinstance(value, bool):
+        return 'true' if value else 'false'
+    if isinstance(value, float):
+        return str(int(value)) if value.is_integer() and abs(value) < 1e15 else repr(value)
+    if hasattr(value, 'isoformat'):
+        return value.strftime('%Y-%m-%d %H:%M:%S') if hasattr(value, 'hour') else value.strftime('%Y-%m-%d')
+    return str(value)
+
+
 class BaseConnector(ABC):
     """
     Abstract base class for all database connectors.
@@ -22,6 +39,8 @@ class BaseConnector(ABC):
         opening, closing = cls.IDENT_QUOTE
         return opening + name.replace(closing, closing * 2) + closing
 
+    SUPPORTS_TRANSACTIONS = True   # False where a batch cannot be rolled back (MongoDB, Redis, Cassandra)
+    PLACEHOLDER = '%s'             # how this driver marks a query parameter
     SUPPORTS_PROFILE = True    # column insights use plain SQL aggregates; False for databases that are not SQL
     LIMIT_STYLE = 'limit'      # how this dialect caps a query: 'limit' | 'top' | 'fetch'
     BUCKET_EXPR = 'FLOOR({x})' # whole-number part of an expression, for histogram buckets
@@ -273,6 +292,125 @@ class BaseConnector(ABC):
                            'referenced_table': fk['referenced_table'], 'referenced_column': fk['referenced_column']}
                           for fk in fks]
         return relations
+
+    # ---- safe writes ---------------------------------------------------------------------------------------
+
+    last_rowcount: Optional[int] = None   # rows the most recent insert/update/delete touched
+    _batch = False
+
+    def _ph(self, index: int) -> str:
+        return self.PLACEHOLDER
+
+    def _where(self, conditions: Dict[str, Any], first_index: int = 0):
+        """WHERE text and its parameters. A NULL condition has to be IS NULL: `col = NULL` never matches anything."""
+        parts, params = [], []
+        for col, val in conditions.items():
+            if val is None:
+                parts.append(f'{self.q(col)} IS NULL')
+            else:
+                parts.append(f'{self.q(col)} = {self._ph(first_index + len(params))}')
+                params.append(val)
+        return ' AND '.join(parts), params
+
+    def _commit(self):
+        if not self._batch:      # inside a batch the batch commits once, at the end
+            self.connection.commit()
+
+    def _rollback(self):
+        if not self._batch:
+            self.connection.rollback()
+
+    def _begin_tx(self):
+        """Start a transaction. Drivers that run in autocommit mode switch it off here."""
+
+    def _end_tx(self, commit: bool):
+        (self.connection.commit if commit else self.connection.rollback)()
+
+    def _lock_rows(self, table: str, conditions: Dict[str, Any], database: Optional[str]):
+        """Lock the rows about to be checked and changed, so nobody can change them in between."""
+
+    def _find_conflicts(self, table, operations, database) -> List[dict]:
+        """Rows whose edited cells no longer hold what the user saw: someone else changed them (or deleted the row)."""
+        conflicts = []
+        for i, op in enumerate(operations):
+            expected = op.get('expected')
+            if op.get('op') != 'update' or not expected or not op.get('conditions'):
+                continue
+            self._lock_rows(table, op['conditions'], database)
+            rows = self.get_table_data(table, database, limit=2, filters=dict(op['conditions']))['rows']
+            if not rows:
+                conflicts += [{'index': i, 'column': c, 'expected': e, 'actual': None} for c, e in expected.items()][:1]
+                continue
+            for column, was in expected.items():
+                now = as_shown(rows[0].get(column))
+                if now != ('' if was is None else str(was)):
+                    conflicts.append({'index': i, 'column': column, 'expected': was, 'actual': now})
+        return conflicts
+
+    def _apply_op(self, table, op, database):
+        kind = op.get('op')
+        self.last_rowcount = None
+        if kind == 'insert':
+            return self.insert_row(table, op.get('data') or {}, database)
+        if kind in ('update', 'delete') and not op.get('conditions'):
+            return False, 'Refusing to change every row in the table: no row was identified.'
+        if kind == 'update':
+            return self.update_row(table, op['conditions'], op.get('data') or {}, database)
+        if kind == 'delete':
+            ok, msg = self.delete_row(table, op['conditions'], database)
+            return (True, 'Row was already gone') if not ok and self.last_rowcount == 0 else (ok, msg)
+        return False, f'Unknown operation: {kind!r}'
+
+    def apply_batch(self, table: str, operations: List[dict], database: Optional[str] = None, force: bool = False) -> Dict[str, Any]:
+        """Apply inserts, updates and deletes as one unit.
+
+        With a transactional database it is all or nothing: the edited rows are locked and checked first (every stale
+        row is reported at once), then everything is applied and committed together, or rolled back if anything fails.
+        Otherwise the operations run in order and the result says exactly how many were applied before a failure.
+        `force=True` skips the stale-row check.
+        """
+        if not operations:
+            return {'success': True, 'applied': 0, 'results': []}
+
+        if not self.SUPPORTS_TRANSACTIONS:
+            results = []
+            for i, op in enumerate(operations):
+                ok, msg = self._apply_op(table, op, database)
+                if not ok:
+                    return {'success': False, 'failed_at': i, 'error': msg, 'rolled_back': False, 'applied': i, 'results': results}
+                results.append(msg)
+            return {'success': True, 'applied': len(operations), 'results': results}
+
+        self._batch = True
+        started = False
+        try:
+            self._prepare(database)
+            self._begin_tx()
+            started = True
+            if not force:
+                conflicts = self._find_conflicts(table, operations, database)
+                if conflicts:
+                    self._end_tx(False)
+                    return {'success': False, 'rolled_back': True, 'conflicts': conflicts,
+                            'error': 'Some rows were changed by someone else since you loaded them. Nothing was saved.'}
+            results = []
+            for i, op in enumerate(operations):
+                ok, msg = self._apply_op(table, op, database)
+                if not ok:
+                    self._end_tx(False)
+                    return {'success': False, 'failed_at': i, 'error': msg, 'rolled_back': True, 'applied': 0}
+                results.append(msg)
+            self._end_tx(True)
+            return {'success': True, 'applied': len(operations), 'results': results}
+        except Exception as e:
+            if started:
+                try:
+                    self._end_tx(False)
+                except Exception:
+                    pass
+            return {'success': False, 'error': str(e), 'rolled_back': True, 'applied': 0}
+        finally:
+            self._batch = False
 
     # ---- column insights -------------------------------------------------------------------------------
 

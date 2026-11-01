@@ -15,6 +15,7 @@ class CassandraConnector(BaseConnector):
     """Cassandra database connector implementation."""
 
     SUPPORTS_PROFILE = False
+    SUPPORTS_TRANSACTIONS = False
 
     def connect(self) -> bool:
         """Establish connection to Cassandra cluster."""

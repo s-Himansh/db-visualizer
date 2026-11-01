@@ -151,6 +151,13 @@ class SQLServerConnector(BaseConnector):
             logger.warning(f"Catalog query for relations failed ({e}); reading table by table")
             return super().get_relations(database)
 
+    def _lock_rows(self, table, conditions, database):
+        where, params = self._where(conditions)
+        cursor = self.connection.cursor()
+        cursor.execute(f"SELECT 1 FROM {self.q(table)} WITH (UPDLOCK, ROWLOCK) WHERE {where}", tuple(params))
+        cursor.fetchall()
+        cursor.close()
+
     def get_columns(self, database: Optional[str] = None, tables: Optional[List[str]] = None) -> Dict[str, List[str]]:
         if database:
             cursor = self.connection.cursor()
@@ -291,7 +298,7 @@ class SQLServerConnector(BaseConnector):
                 row_count = len(rows)
             else:
                 # For INSERT, UPDATE, DELETE
-                self.connection.commit()
+                self._commit()
                 row_data = []
                 columns = []
                 row_count = cursor.rowcount
@@ -307,7 +314,7 @@ class SQLServerConnector(BaseConnector):
                 'error': None
             }
         except Exception as e:
-            self.connection.rollback()
+            self._rollback()
             execution_time = time.time() - start_time
             return {
                 'columns': [],
@@ -403,12 +410,12 @@ class SQLServerConnector(BaseConnector):
 
             cursor = self.connection.cursor()
             cursor.execute(query, list(data.values()))
-            self.connection.commit()
+            self._commit()
             cursor.close()
 
             return True, "Row inserted successfully"
         except Exception as e:
-            self.connection.rollback()
+            self._rollback()
             return False, f"Insert failed: {str(e)}"
 
     def update_row(
@@ -429,20 +436,23 @@ class SQLServerConnector(BaseConnector):
             set_clause = ', '.join([f"{self.q(col)} = %s" for col in data.keys()])
 
             # Build WHERE clause
-            where_clause = ' AND '.join([f"{self.q(col)} = %s" for col in conditions.keys()])
+            where_clause, where_params = self._where(conditions, len(data))
 
             query = f"UPDATE {self.q(table)} SET {set_clause} WHERE {where_clause}"
-            params = list(data.values()) + list(conditions.values())
+            params = list(data.values()) + where_params
 
             cursor = self.connection.cursor()
             cursor.execute(query, params)
-            self.connection.commit()
+            self._commit()
             rows_affected = cursor.rowcount
+            self.last_rowcount = rows_affected
             cursor.close()
 
+            if rows_affected == 0:
+                return False, "Update failed: no row matched. It may have been changed or deleted since you loaded it."
             return True, f"{rows_affected} row(s) updated"
         except Exception as e:
-            self.connection.rollback()
+            self._rollback()
             return False, f"Update failed: {str(e)}"
 
     def delete_row(
@@ -459,18 +469,20 @@ class SQLServerConnector(BaseConnector):
                 cursor.close()
 
             # Build WHERE clause
-            where_clause = ' AND '.join([f"{self.q(col)} = %s" for col in conditions.keys()])
+            where_clause, params = self._where(conditions)
 
             query = f"DELETE FROM {self.q(table)} WHERE {where_clause}"
-            params = list(conditions.values())
 
             cursor = self.connection.cursor()
             cursor.execute(query, params)
-            self.connection.commit()
+            self._commit()
             rows_affected = cursor.rowcount
+            self.last_rowcount = rows_affected
             cursor.close()
 
+            if rows_affected == 0:
+                return False, "Delete failed: no row matched. It may already have been deleted."
             return True, f"{rows_affected} row(s) deleted"
         except Exception as e:
-            self.connection.rollback()
+            self._rollback()
             return False, f"Delete failed: {str(e)}"

@@ -1,0 +1,157 @@
+"""Saving is all-or-nothing, and never overwrites someone else's change without asking."""
+import sqlite3
+
+import pytest
+
+from conftest import add_sqlite_connection, answer_dialogs, connect, dialogs
+
+pytestmark = pytest.mark.e2e
+
+
+def db(pg, sql, *args):
+    c = sqlite3.connect(pg.demo_db)
+    try:
+        out = c.execute(sql, args).fetchall()
+        c.commit()
+        return out
+    finally:
+        c.close()
+
+
+def open_table(pg, name):
+    pg.locator('#tables-content .tree-item').filter(has=pg.locator(f'.tree-label:text-is("{name}")')).click()
+    pg.wait_for_selector('.tab-content.active .data-table tbody tr')
+
+
+def edit(pg, row, column, text):
+    cell = pg.locator(f'.tab-content.active tr[data-row-index="{row}"] td[data-column={column}]')
+    cell.click()
+    pg.keyboard.press('ControlOrMeta+A')
+    pg.keyboard.type(text)
+    pg.keyboard.press('Tab')
+
+
+def save(pg):
+    pg.click('.tab-content.active [data-action=save-changes]')
+
+
+def toast_with(pg, text):
+    """Wait for a toast that says `text` (older toasts may still be on screen)."""
+    pg.wait_for_function("t => document.querySelector('#toast-stack') && document.querySelector('#toast-stack').innerText.includes(t)", arg=text)
+    return pg.inner_text('#toast-stack')
+
+
+# ---- the happy path ---------------------------------------------------------------------------------------------
+
+def test_several_edits_save_together_and_say_how_many(connected):
+    open_table(connected, 'customers')
+    edit(connected, 0, 'name', 'First')
+    edit(connected, 1, 'name', 'Second')
+    save(connected)
+    connected.wait_for_function("document.querySelector('#toast-stack') && document.querySelector('#toast-stack').innerText.includes('Saved 2 changes')")
+    assert db(connected, 'select name from customers where id in (1, 2) order by id') == [('First',), ('Second',)]
+    assert connected.locator('.tab-content.active td.modified').count() == 0
+
+
+# ---- all or nothing ----------------------------------------------------------------------------------------------
+
+def test_one_bad_row_means_nothing_is_saved_and_your_edits_are_kept(connected):
+    open_table(connected, 'customers')
+    before = db(connected, 'select name from customers where id = 1')
+    edit(connected, 0, 'name', 'Would be saved')
+    connected.click('.tab-content.active [data-action=add-row]')
+    new = connected.locator('.tab-content.active tr.new-row')
+    new.locator('td[data-column=id]').click()
+    connected.keyboard.type('2')                                    # id 2 already exists: this insert must fail
+    new.locator('td[data-column=name]').click()
+    connected.keyboard.type('Duplicate')
+    connected.keyboard.press('Tab')
+    save(connected)
+    toast_with(connected, 'Nothing was saved')
+    assert db(connected, 'select name from customers where id = 1') == before     # the good edit was not saved alone
+    assert db(connected, "select count(*) from customers where name = 'Duplicate'") == [(0,)]
+    assert connected.locator('.tab-content.active td.modified').count() >= 1     # still there to fix and retry
+    assert connected.locator('.tab-content.active tr.new-row').count() == 1
+
+
+def test_deleting_rows_is_one_step_and_a_row_already_gone_does_not_block_it(connected):
+    open_table(connected, 'customers')
+    connected.check('.tab-content.active tr[data-row-index="0"] .row-checkbox')
+    connected.check('.tab-content.active tr[data-row-index="1"] .row-checkbox')
+    db(connected, 'delete from customers where id = 1')               # someone already deleted the first one
+    connected.click('.tab-content.active [data-action=delete-row]')
+    connected.wait_for_function("document.querySelector('#toast-stack') && document.querySelector('#toast-stack').innerText.includes('Deleted 2 rows')")
+    assert db(connected, 'select count(*) from customers where id in (1, 2)') == [(0,)]
+
+
+# ---- someone else changed it -----------------------------------------------------------------------------------------
+
+def test_a_row_changed_by_someone_else_is_shown_and_you_can_keep_editing(connected):
+    open_table(connected, 'customers')
+    original = db(connected, 'select name from customers where id = 1')[0][0]
+    edit(connected, 0, 'name', 'My version')
+    db(connected, "update customers set name = 'Their version' where id = 1")      # changed behind your back
+    answer_dialogs(connected, False)                                               # "Keep editing"
+    save(connected)
+    connected.wait_for_function("window.__dialogs.length >= 1")
+    text = dialogs(connected)[-1]
+    assert 'changed by someone else' in text and 'Nothing has been saved' in text
+    assert f'name was "{original}" when you loaded it, now "Their version"' in text and 'id = 1' in text
+    assert db(connected, 'select name from customers where id = 1') == [('Their version',)]
+    assert connected.locator('.tab-content.active td.modified').count() == 1       # your edit is still pending
+
+
+def test_you_can_choose_to_save_over_it(connected):
+    open_table(connected, 'customers')
+    edit(connected, 0, 'name', 'My version')
+    db(connected, "update customers set name = 'Their version' where id = 1")
+    answer_dialogs(connected, True)                                                # "Save anyway"
+    save(connected)
+    connected.wait_for_function("document.querySelector('#toast-stack') && document.querySelector('#toast-stack').innerText.includes('Saved 1 change')")
+    assert db(connected, 'select name from customers where id = 1') == [('My version',)]
+
+
+def test_every_conflicting_row_is_listed_at_once(connected):
+    open_table(connected, 'customers')
+    edit(connected, 0, 'name', 'Mine 1')
+    edit(connected, 1, 'name', 'Mine 2')
+    db(connected, "update customers set name = 'Theirs 1' where id = 1")
+    db(connected, "update customers set name = 'Theirs 2' where id = 2")
+    answer_dialogs(connected, False)
+    save(connected)
+    connected.wait_for_function("window.__dialogs.length >= 1")
+    text = dialogs(connected)[-1]
+    assert '2 rows were changed' in text and 'Theirs 1' in text and 'Theirs 2' in text
+
+
+def test_editing_a_row_that_was_deleted_says_so(connected):
+    open_table(connected, 'customers')
+    edit(connected, 0, 'name', 'Mine')
+    db(connected, 'delete from customers where id = 1')
+    answer_dialogs(connected, False)
+    save(connected)
+    connected.wait_for_function("window.__dialogs.length >= 1")
+    assert 'no longer exists' in dialogs(connected)[-1]
+
+
+def test_unchanged_rows_cause_no_dialog_even_after_other_rows_change(connected):
+    open_table(connected, 'customers')
+    edit(connected, 0, 'name', 'Mine')
+    db(connected, "update customers set name = 'Elsewhere' where id = 5")          # a different row
+    save(connected)
+    connected.wait_for_function("document.querySelector('#toast-stack') && document.querySelector('#toast-stack').innerText.includes('Saved 1 change')")
+    assert dialogs(connected) == []
+
+
+# ---- the silent failure this replaces ----------------------------------------------------------------------------------
+
+def test_editing_a_table_with_no_primary_key_and_a_null_really_saves(page):
+    db(page, 'create table loose(a text, b text)')
+    db(page, "insert into loose values ('one', NULL), ('two', 'x')")
+    add_sqlite_connection(page)
+    connect(page)
+    open_table(page, 'loose')
+    edit(page, 0, 'a', 'ONE')
+    save(page)
+    toast_with(page, 'Saved 1 change')
+    assert db(page, 'select a, b from loose order by rowid') == [('ONE', None), ('two', 'x')]

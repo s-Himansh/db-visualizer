@@ -37,7 +37,14 @@ class MySQLConnector(BaseConnector):
                 'password': self.connection_params.get('password'),
                 'database': self.connection_params.get('database'),
                 'charset': 'utf8mb4',
-                'cursorclass': pymysql.cursors.DictCursor
+                'cursorclass': pymysql.cursors.DictCursor,
+                # report rows MATCHED, not rows changed: an update that sets a value to what it already is
+                # touches no row by MySQL's default count, which would look like "no row matched"
+                'client_flag': pymysql.constants.CLIENT.FOUND_ROWS,
+                # Autocommit, like the PostgreSQL connector. Without it even a plain SELECT opens a transaction that is
+                # never closed, and that holds a metadata lock: anyone else's ALTER/DROP TABLE then waits (for a year,
+                # by default) and every query on the table queues up behind it. Batches open their own transaction.
+                'autocommit': True
             }
 
             # Remove None values
@@ -64,6 +71,14 @@ class MySQLConnector(BaseConnector):
                 for r in cursor.fetchall()]
         cursor.close()
         return rows
+
+    def _begin_tx(self):
+        self.connection.begin()
+
+    def _lock_rows(self, table, conditions, database):
+        where, params = self._where(conditions)
+        with self.connection.cursor() as cursor:
+            cursor.execute(f"SELECT 1 FROM {self.q(table)} WHERE {where} FOR UPDATE", params)
 
     def cancel(self) -> bool:
         # MySQL has no client-side cancel: open a second connection and KILL QUERY the running one
@@ -245,7 +260,7 @@ class MySQLConnector(BaseConnector):
                 row_count = len(rows)
             else:
                 # For INSERT, UPDATE, DELETE
-                self.connection.commit()
+                self._commit()
                 row_data = []
                 columns = []
                 row_count = cursor.rowcount
@@ -261,7 +276,7 @@ class MySQLConnector(BaseConnector):
                 'error': None
             }
         except Exception as e:
-            self.connection.rollback()
+            self._rollback()
             execution_time = time.time() - start_time
             return {
                 'columns': [],
@@ -350,13 +365,13 @@ class MySQLConnector(BaseConnector):
 
             cursor = self.connection.cursor()
             cursor.execute(query, list(data.values()))
-            self.connection.commit()
+            self._commit()
             last_id = cursor.lastrowid
             cursor.close()
 
             return True, f"Row inserted successfully (ID: {last_id})"
         except Exception as e:
-            self.connection.rollback()
+            self._rollback()
             return False, f"Insert failed: {str(e)}"
 
     def update_row(
@@ -375,20 +390,23 @@ class MySQLConnector(BaseConnector):
             set_clause = ', '.join([f"{self.q(col)} = %s" for col in data.keys()])
 
             # Build WHERE clause
-            where_clause = ' AND '.join([f"{self.q(col)} = %s" for col in conditions.keys()])
+            where_clause, where_params = self._where(conditions, len(data))
 
             query = f"UPDATE {self.q(table)} SET {set_clause} WHERE {where_clause}"
-            params = list(data.values()) + list(conditions.values())
+            params = list(data.values()) + where_params
 
             cursor = self.connection.cursor()
             cursor.execute(query, params)
-            self.connection.commit()
+            self._commit()
             rows_affected = cursor.rowcount
+            self.last_rowcount = rows_affected
             cursor.close()
 
+            if rows_affected == 0:
+                return False, "Update failed: no row matched. It may have been changed or deleted since you loaded it."
             return True, f"{rows_affected} row(s) updated"
         except Exception as e:
-            self.connection.rollback()
+            self._rollback()
             return False, f"Update failed: {str(e)}"
 
     def delete_row(
@@ -403,18 +421,20 @@ class MySQLConnector(BaseConnector):
                 self.connection.select_db(database)
 
             # Build WHERE clause
-            where_clause = ' AND '.join([f"{self.q(col)} = %s" for col in conditions.keys()])
+            where_clause, params = self._where(conditions)
 
             query = f"DELETE FROM {self.q(table)} WHERE {where_clause}"
-            params = list(conditions.values())
 
             cursor = self.connection.cursor()
             cursor.execute(query, params)
-            self.connection.commit()
+            self._commit()
             rows_affected = cursor.rowcount
+            self.last_rowcount = rows_affected
             cursor.close()
 
+            if rows_affected == 0:
+                return False, "Delete failed: no row matched. It may already have been deleted."
             return True, f"{rows_affected} row(s) deleted"
         except Exception as e:
-            self.connection.rollback()
+            self._rollback()
             return False, f"Delete failed: {str(e)}"

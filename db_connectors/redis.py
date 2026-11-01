@@ -11,6 +11,7 @@ class RedisConnector(BaseConnector):
     """Redis database connector implementation."""
 
     SUPPORTS_PROFILE = False
+    SUPPORTS_TRANSACTIONS = False
 
     MAX_KEYS = 100_000
 

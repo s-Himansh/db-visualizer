@@ -494,3 +494,207 @@ def test_profile_is_not_offered_for_non_sql_databases(env):
     assert conn.SUPPORTS_PROFILE is False
     with pytest.raises(NotImplementedError):
         conn.profile_column('people', 'id', b.db)
+
+
+# ---- writing safely: atomic batches, stale edits, writes that match nothing -------------------------------------
+
+SQL_WRITE = ('sqlite', 'mysql', 'postgresql', 'sqlserver', 'oracle')
+
+
+def _sql_only(b):
+    if b.id not in SQL_WRITE:
+        pytest.skip('transactions and stale-edit checks are for SQL databases')
+
+
+def _cleanup(conn, b, *ids):
+    for i in ids:
+        conn.delete_row('people', {'id': i}, b.db)
+
+
+def _name(conn, b, id_):
+    rows = data(conn, b, filters={'id': id_})['rows']
+    return rows[0]['name'] if rows else None
+
+
+def test_an_update_or_delete_that_matches_nothing_is_a_failure(env):
+    b, conn = env
+    _sql_only(b)
+    ok, msg = conn.update_row('people', {'id': 424242}, {'name': 'x'}, b.db)
+    assert ok is False and 'matched' in msg
+    ok, msg = conn.delete_row('people', {'id': 424242}, b.db)
+    assert ok is False and 'matched' in msg
+
+
+def test_a_null_in_the_conditions_means_is_null(env):
+    b, conn = env
+    _sql_only(b)
+    assert conn.insert_row('people', {'id': 910, 'name': None, 'country': 'NN', 'score': 1}, b.db)[0]
+    try:
+        ok, msg = conn.update_row('people', {'id': 910, 'name': None}, {'country': 'ZZ'}, b.db)
+        assert ok, msg
+        assert data(conn, b, filters={'id': 910})['rows'][0]['country'] == 'ZZ'
+    finally:
+        _cleanup(conn, b, 910)
+
+
+def test_a_batch_commits_inserts_updates_and_deletes_together(env):
+    b, conn = env
+    _sql_only(b)
+    ops = [{'op': 'insert', 'data': {'id': 930, 'name': 'one', 'country': 'BB', 'score': 1}},
+           {'op': 'insert', 'data': {'id': 931, 'name': 'two', 'country': 'BB', 'score': 2}},
+           {'op': 'update', 'conditions': {'id': 931}, 'data': {'name': 'batched'}},
+           {'op': 'delete', 'conditions': {'id': 930}}]
+    try:
+        r = conn.apply_batch('people', ops, b.db)
+        assert r['success'] and r['applied'] == 4
+        assert _name(conn, b, 931) == 'batched' and _name(conn, b, 930) is None
+    finally:
+        _cleanup(conn, b, 930, 931)
+
+
+def test_a_failing_batch_changes_nothing(env):
+    b, conn = env
+    _sql_only(b)
+    before = _name(conn, b, 1)
+    ops = [{'op': 'insert', 'data': {'id': 940, 'name': 'ghost', 'country': 'GG', 'score': 1}},
+           {'op': 'update', 'conditions': {'id': 1}, 'data': {'name': 'half-saved'}},
+           {'op': 'insert', 'data': {'id': 1, 'name': 'duplicate key', 'country': 'GG', 'score': 1}}]   # fails
+    r = conn.apply_batch('people', ops, b.db)
+    assert r['success'] is False and r['failed_at'] == 2 and r['rolled_back'] is True and r['error']
+    assert _name(conn, b, 940) is None and _name(conn, b, 1) == before          # nothing from before the failure survived
+    assert data(conn, b, limit=1)['total_count'] == 30                          # and the connection is still good
+
+
+def test_a_failed_batch_leaves_the_connection_in_its_normal_mode(env):
+    b, conn = env
+    _sql_only(b)
+    conn.apply_batch('people', [{'op': 'insert', 'data': {'id': 1, 'name': 'dup', 'country': 'GG', 'score': 1}}], b.db)
+    # a normal write afterwards must commit on its own, not sit in an open transaction
+    assert conn.insert_row('people', {'id': 950, 'name': 'after', 'country': 'AA', 'score': 1}, b.db)[0]
+    other = new_connector(b) if b.id != 'sqlite' else conn
+    try:
+        assert data(other, b, filters={'id': 950})['total_count'] == 1          # visible to a second connection = committed
+    finally:
+        _cleanup(conn, b, 950)
+        if other is not conn:
+            other.disconnect()
+
+
+def test_a_stale_row_is_reported_and_nothing_is_written(env):
+    b, conn = env
+    _sql_only(b)
+    original = _name(conn, b, 5)
+    assert conn.update_row('people', {'id': 5}, {'name': 'changed by someone else'}, b.db)[0]    # the other person's edit
+    try:
+        r = conn.apply_batch('people', [{'op': 'update', 'conditions': {'id': 5}, 'data': {'name': 'mine'},
+                                         'expected': {'name': original}}], b.db)
+        assert r['success'] is False and r['rolled_back'] is True
+        assert r['conflicts'] == [{'index': 0, 'column': 'name', 'expected': original, 'actual': 'changed by someone else'}]
+        assert _name(conn, b, 5) == 'changed by someone else'
+    finally:
+        conn.update_row('people', {'id': 5}, {'name': original}, b.db)
+
+
+def test_every_row_is_checked_before_any_is_changed(env):
+    b, conn = env
+    _sql_only(b)
+    o2, o6 = _name(conn, b, 2), _name(conn, b, 6)
+    conn.update_row('people', {'id': 6}, {'name': 'moved'}, b.db)
+    try:
+        r = conn.apply_batch('people', [
+            {'op': 'update', 'conditions': {'id': 2}, 'data': {'name': 'fine'}, 'expected': {'name': o2}},
+            {'op': 'update', 'conditions': {'id': 6}, 'data': {'name': 'stale'}, 'expected': {'name': o6}}], b.db)
+        assert [c['index'] for c in r['conflicts']] == [1]                      # only the stale one is named
+        assert _name(conn, b, 2) == o2                                          # the good edit was not applied either
+    finally:
+        conn.update_row('people', {'id': 6}, {'name': o6}, b.db)
+
+
+def test_a_row_deleted_by_someone_else_is_a_conflict(env):
+    b, conn = env
+    _sql_only(b)
+    r = conn.apply_batch('people', [{'op': 'update', 'conditions': {'id': 424242}, 'data': {'name': 'x'},
+                                     'expected': {'name': 'whatever'}}], b.db)
+    assert r['success'] is False and r['conflicts'][0]['actual'] is None and r['conflicts'][0]['index'] == 0
+
+
+def test_force_saves_over_a_conflict(env):
+    b, conn = env
+    _sql_only(b)
+    original = _name(conn, b, 7)
+    conn.update_row('people', {'id': 7}, {'name': 'theirs'}, b.db)
+    try:
+        r = conn.apply_batch('people', [{'op': 'update', 'conditions': {'id': 7}, 'data': {'name': 'mine'},
+                                         'expected': {'name': original}}], b.db, force=True)
+        assert r['success'] and _name(conn, b, 7) == 'mine'
+    finally:
+        conn.update_row('people', {'id': 7}, {'name': original}, b.db)
+
+
+def test_values_are_compared_the_way_the_grid_shows_them(env):
+    """No false alarms: what the grid displays for every column type must match what the check reads back."""
+    from db_connectors.base import as_shown
+    b, conn = env
+    _sql_only(b)
+    row = data(conn, b, filters={'id': 3})['rows'][0]
+    expected = {c: as_shown(row[c]) for c in ('name', 'country', 'score')}
+    r = conn.apply_batch('people', [{'op': 'update', 'conditions': {'id': 3}, 'data': {'country': row['country']},
+                                     'expected': expected}], b.db)
+    assert r['success'], r
+
+
+def test_deleting_an_already_deleted_row_in_a_batch_is_fine(env):
+    b, conn = env
+    _sql_only(b)
+    r = conn.apply_batch('people', [{'op': 'delete', 'conditions': {'id': 424242}}], b.db)
+    assert r['success'] is True
+
+
+def test_a_batch_will_not_change_every_row(env):
+    b, conn = env
+    _sql_only(b)
+    r = conn.apply_batch('people', [{'op': 'update', 'conditions': {}, 'data': {'country': 'XX'}}], b.db)
+    assert r['success'] is False and data(conn, b, filters={'country': 'XX'})['total_count'] == 0
+    assert conn.apply_batch('people', [{'op': 'frobnicate'}], b.db)['success'] is False
+
+
+def test_databases_without_transactions_stop_at_the_first_failure_and_say_how_far_they_got(env):
+    b, conn = env
+    if b.id != 'cassandra':
+        pytest.skip('covered for the databases that cannot roll back')
+    ops = [{'op': 'insert', 'data': {'id': 960, 'name': 'kept', 'country': 'CC', 'score': 1}},
+           {'op': 'update', 'conditions': {'id': 424242}, 'data': {'name': 'nobody'}}]      # no such row
+    r = conn.apply_batch('people', ops, b.db)
+    try:
+        assert r['success'] is False and r['rolled_back'] is False and r['applied'] == 1 and r['failed_at'] == 1
+        assert _name(conn, b, 960) == 'kept'                                     # honest: the first one did happen
+    finally:
+        _cleanup(conn, b, 960)
+
+
+# ---- looking at a table must never hold it hostage ---------------------------------------------------------------
+
+LOCK_SETUP = {'mysql': 'SET SESSION lock_wait_timeout = 3', 'postgresql': "SET lock_timeout = '3s'",
+              'sqlserver': 'SET LOCK_TIMEOUT 3000', 'oracle': 'ALTER SESSION SET ddl_lock_timeout = 3'}
+
+
+def test_reading_a_table_does_not_block_someone_else_changing_its_structure(env):
+    """A connection left in an open transaction after a SELECT holds a metadata lock (MySQL) and makes every
+    ALTER TABLE / DROP TABLE by anyone else wait forever, and every query on the table queue behind it."""
+    b, conn = env
+    if b.id not in LOCK_SETUP:
+        pytest.skip('only the networked SQL databases hold such locks')
+    app = new_connector(b)
+    data(app, b, limit=5)                                  # the app merely looks at the table...
+    app.get_schema('people', b.db)
+    app.get_columns(b.db, ['people'])
+    q = conn.q
+    for stmt in (LOCK_SETUP[b.id],):
+        conn.execute_query(stmt)
+    try:
+        r = conn.execute_query(f'ALTER TABLE {q("people")} ADD {q("tmp_col")} INT' if b.id != 'oracle'
+                               else f'ALTER TABLE {q("people")} ADD ({q("tmp_col")} NUMBER(5))')
+        assert not r.get('error'), f'someone else could not change the table while the app only had it open: {r["error"]}'
+    finally:
+        conn.execute_query(f'ALTER TABLE {q("people")} DROP COLUMN {q("tmp_col")}')
+        app.disconnect()

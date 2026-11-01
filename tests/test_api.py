@@ -333,3 +333,85 @@ def test_profile_endpoint_samples_big_tables(client, conn_id, sqlite_path, monke
 
 def test_profile_endpoint_needs_a_connection_and_a_sql_database(client):
     assert client.get('/api/profile?connection_id=none&table=t&column=c').status_code == 400
+
+
+# --- saving several changes at once ------------------------------------------------------------------------------
+
+def batch(client, cid, path, ops, **extra):
+    return client.post('/api/data/batch', json={'connection_id': cid, 'table': 't', 'database': path, 'operations': ops, **extra})
+
+
+def names(path):
+    import sqlite3
+    c = sqlite3.connect(path)
+    try:
+        return [r[0] for r in c.execute('select name from t order by id')]
+    finally:
+        c.close()
+
+
+def test_batch_saves_everything_in_one_go(client, conn_id, sqlite_path):
+    r = batch(client, conn_id, sqlite_path, [
+        {'op': 'insert', 'data': {'name': 'new'}},
+        {'op': 'update', 'conditions': {'id': 1}, 'data': {'name': 'renamed'}, 'expected': {'name': 'alpha'}},
+        {'op': 'delete', 'conditions': {'id': 2}}])
+    assert r.status_code == 200 and r.get_json()['applied'] == 3
+    assert names(sqlite_path) == ['renamed', "O'Brien", 'new']
+
+
+def test_batch_that_fails_halfway_saves_nothing(client, conn_id, sqlite_path):
+    r = batch(client, conn_id, sqlite_path, [
+        {'op': 'update', 'conditions': {'id': 1}, 'data': {'name': 'first'}},
+        {'op': 'insert', 'data': {'id': 1, 'name': 'duplicate primary key'}}])
+    body = r.get_json()
+    assert r.status_code == 422 and body['failed_at'] == 1 and body['rolled_back'] is True
+    assert names(sqlite_path) == ['alpha', 'beta', "O'Brien"]                  # the first change did not survive
+
+
+def test_a_row_changed_by_someone_else_is_a_409_naming_it_and_nothing_is_saved(client, conn_id, sqlite_path):
+    import sqlite3
+    c = sqlite3.connect(sqlite_path)
+    c.execute("update t set name = 'theirs' where id = 1")
+    c.commit()
+    c.close()
+    r = batch(client, conn_id, sqlite_path, [
+        {'op': 'update', 'conditions': {'id': 1}, 'data': {'name': 'mine'}, 'expected': {'name': 'alpha'}},
+        {'op': 'update', 'conditions': {'id': 2}, 'data': {'name': 'also mine'}, 'expected': {'name': 'beta'}}])
+    body = r.get_json()
+    assert r.status_code == 409 and body['conflicts'] == [{'index': 0, 'column': 'name', 'expected': 'alpha', 'actual': 'theirs'}]
+    assert names(sqlite_path) == ['theirs', 'beta', "O'Brien"]
+
+
+def test_force_saves_over_the_conflict(client, conn_id, sqlite_path):
+    import sqlite3
+    c = sqlite3.connect(sqlite_path)
+    c.execute("update t set name = 'theirs' where id = 1")
+    c.commit()
+    c.close()
+    r = batch(client, conn_id, sqlite_path, [
+        {'op': 'update', 'conditions': {'id': 1}, 'data': {'name': 'mine'}, 'expected': {'name': 'alpha'}}], force=True)
+    assert r.status_code == 200 and names(sqlite_path)[0] == 'mine'
+
+
+def test_read_only_connections_cannot_batch_write(client, sqlite_path):
+    cid = _sqlite_conn(client, sqlite_path, read_only=True)
+    r = batch(client, cid, sqlite_path, [{'op': 'delete', 'conditions': {'id': 1}}])
+    assert r.status_code == 403 and names(sqlite_path) == ['alpha', 'beta', "O'Brien"]
+
+
+def test_bad_batches_are_refused_without_touching_the_database(client, conn_id, sqlite_path):
+    for body in ([], 'nope', [{'op': 'drop table'}], [{'nothing': 1}], [{'op': 'update', 'conditions': {}, 'data': {'name': 'x'}}]):
+        r = batch(client, conn_id, sqlite_path, body)
+        assert r.status_code in (400, 422), body
+    assert names(sqlite_path) == ['alpha', 'beta', "O'Brien"]
+    assert batch(client, conn_id, sqlite_path, [{'op': 'delete', 'conditions': {'id': 1}}] * 5001).status_code == 400
+
+
+def test_batch_needs_a_connection(client):
+    r = client.post('/api/data/batch', json={'connection_id': 'nope', 'table': 't', 'operations': [{'op': 'delete', 'conditions': {'id': 1}}]})
+    assert r.status_code == 400
+
+
+def test_the_single_row_endpoints_no_longer_claim_success_for_nothing(client, conn_id, sqlite_path):
+    r = client.put('/api/data', json={'connection_id': conn_id, 'table': 't', 'conditions': {'id': 999}, 'data': {'name': 'x'}})
+    assert r.get_json()['success'] is False and 'matched' in r.get_json()['error']

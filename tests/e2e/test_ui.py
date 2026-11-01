@@ -194,7 +194,7 @@ def test_edit_cell_and_save_persists(connected):
     open_table(connected, 'customers')
     cell = connected.locator('.tab-content.active tr[data-row-index="0"] td[data-column=name]')
     cell.click()
-    connected.keyboard.press('Meta+A')
+    connected.keyboard.press('ControlOrMeta+A')
     connected.keyboard.type('Renamed Person')
     connected.keyboard.press('Tab')  # blur the cell
     connected.click('.tab-content.active [data-action=save-changes]')
@@ -206,7 +206,7 @@ def test_discard_changes(connected):
     open_table(connected, 'customers')
     cell = connected.locator('.tab-content.active tr[data-row-index="0"] td[data-column=name]')
     cell.click()
-    connected.keyboard.press('Meta+A')
+    connected.keyboard.press('ControlOrMeta+A')
     connected.keyboard.type('Temp')
     connected.keyboard.press('Tab')
     connected.click('.tab-content.active [data-action=discard-changes]')

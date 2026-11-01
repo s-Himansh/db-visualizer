@@ -2240,57 +2240,25 @@ class TabManager {
             console.error('Error fetching schema:', error);
         }
 
-        // Delete each selected row
+        // New (unsaved) rows just disappear; the rest are deleted together, all or none
+        const operations = [];
         for (const checkbox of selectedCheckboxes) {
             const row = checkbox.closest('tr');
-            const rowIndex = row.getAttribute('data-row-index');
+            if (row.getAttribute('data-row-index') === 'new') { row.remove(); continue; }
 
-            // Skip new rows (not yet saved)
-            if (rowIndex === 'new') {
-                row.remove();
-                continue;
-            }
-
-            // Build conditions from primary keys or all columns
-            const cells = row.querySelectorAll('td.editable, td.null');
             const conditions = {};
-
-            cells.forEach(cell => {
+            row.querySelectorAll('td.editable, td.null').forEach(cell => {
                 const colName = cell.getAttribute('data-column');
                 const value = cell.getAttribute('data-original-value');
-
-                if (primaryKeys.length > 0) {
-                    if (primaryKeys.includes(colName)) {
-                        conditions[colName] = value || null;
-                    }
-                } else {
-                    conditions[colName] = value || null;
-                }
+                if (primaryKeys.length === 0 || primaryKeys.includes(colName)) conditions[colName] = value === '' ? null : value;
             });
+            operations.push({ op: 'delete', conditions });
+        }
 
-            try {
-                const response = await fetch('/api/data', {
-                    method: 'DELETE',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        connection_id: activeConn.id,
-                        database: tab.state.database,
-                        table: tab.state.tableName,
-                        conditions: conditions
-                    })
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    row.remove();
-                } else {
-                    ui.notify(`Failed to delete row: ${result.error}`);
-                }
-            } catch (error) {
-                console.error('Error deleting row:', error);
-                ui.notify(`Error deleting row: ${error.message}`);
-            }
+        if (operations.length) {
+            if (!(await this.sendBatch(tab, activeConn, operations))) return;
+            await this.loadTableData(tab);
+            ui.notify(`Deleted ${operations.length} row${operations.length === 1 ? '' : 's'}.`, 'success');
         }
 
         this.toggleSaveButtons(tab, false);
@@ -2336,191 +2304,112 @@ class TabManager {
             console.error('Error fetching schema:', error);
         }
 
-        // Save new rows (INSERT)
-        for (const newRow of newRows) {
-            const cells = newRow.querySelectorAll('td.editable, td.json-editable, td.long-text-editable');
-            const data = {};
-
-            cells.forEach(cell => {
-                const colName = cell.getAttribute('data-column');
-
-                // Check if this is a JSON/long-text cell with data stored in jsonDataStore
-                const jsonIcon = cell.querySelector('.json-view-icon');
-                if (jsonIcon) {
-                    const jsonId = jsonIcon.getAttribute('data-json-id');
-                    if (jsonId && this.jsonDataStore.has(jsonId)) {
-                        const storedValue = this.jsonDataStore.get(jsonId);
-                        // For JSON objects, convert back to string
-                        if (typeof storedValue === 'object') {
-                            data[colName] = JSON.stringify(storedValue);
-                        } else {
-                            data[colName] = storedValue;
-                        }
-                        return;
-                    }
+        // Everything is saved as ONE request: it all happens or none of it does (where the database can roll back)
+        const cellValue = (cell) => {
+            // JSON / long-text cells keep their full value in jsonDataStore
+            const jsonIcon = cell.querySelector('.json-view-icon');
+            if (jsonIcon) {
+                const jsonId = jsonIcon.getAttribute('data-json-id');
+                if (jsonId && this.jsonDataStore.has(jsonId)) {
+                    const stored = this.jsonDataStore.get(jsonId);
+                    return typeof stored === 'object' ? JSON.stringify(stored) : stored;
                 }
-
-                const value = cell.textContent.trim();
-                data[colName] = value === 'NULL' || value === '' ? null : value;
-            });
-
-            try {
-                const response = await fetch('/api/data', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        connection_id: activeConn.id,
-                        database: tab.state.database,
-                        table: tab.state.tableName,
-                        data: data
-                    })
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    newRow.classList.remove('new-row');
-                    newRow.classList.add('saved-row');
-                } else {
-                    ui.notify(`Failed to insert row: ${result.error}`);
-                    return;
-                }
-            } catch (error) {
-                console.error('Error inserting row:', error);
-                ui.notify(`Error inserting row: ${error.message}`);
-                return;
             }
+            const text = cell.textContent.trim();
+            return text === 'NULL' || text === '' ? null : text;
+        };
+        const asValue = (v) => (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v;
+        const operations = [];
+
+        for (const newRow of newRows) {
+            const data = {};
+            newRow.querySelectorAll('td.editable, td.json-editable, td.long-text-editable').forEach(cell => {
+                data[cell.getAttribute('data-column')] = cellValue(cell);
+            });
+            operations.push({ op: 'insert', data });
         }
 
-        // Save modified rows (UPDATE)
         const modifiedRows = {};
         modifiedCells.forEach(cell => {
-            const row = cell.closest('tr');
-            const rowIndex = row.getAttribute('data-row-index');
-
-            if (!modifiedRows[rowIndex]) {
-                modifiedRows[rowIndex] = { row, cells: [] };
-            }
-
-            modifiedRows[rowIndex].cells.push(cell);
+            const idx = cell.closest('tr').getAttribute('data-row-index');
+            (modifiedRows[idx] = modifiedRows[idx] || []).push(cell);
         });
-
         for (const rowIndex in modifiedRows) {
-            const { row, cells } = modifiedRows[rowIndex];
-            const rowIdx = parseInt(rowIndex);
+            const cells = modifiedRows[rowIndex];
+            const originalRow = tab.originalTableData[parseInt(rowIndex)];
+            if (!originalRow) { console.error('Original row data not found for index:', rowIndex); continue; }
 
-            // Get original row data
-            const originalRow = tab.originalTableData[rowIdx];
-            if (!originalRow) {
-                console.error('Original row data not found for index:', rowIdx);
-                continue;
-            }
-
-            // Build update data and conditions
-            const updateData = {};
             const conditions = {};
-
-            // Build conditions from primary keys or all original values
             if (primaryKeys.length > 0) {
-                // Use primary keys for conditions
-                primaryKeys.forEach(pkCol => {
-                    let value = originalRow[pkCol];
-                    // Convert objects to JSON string
-                    if (typeof value === 'object' && value !== null) {
-                        value = JSON.stringify(value);
-                    }
-                    conditions[pkCol] = value;
-                });
+                primaryKeys.forEach(pk => { conditions[pk] = asValue(originalRow[pk]); });
             } else {
-                // Use all original values as conditions (except modified columns)
-                const modifiedColumns = new Set();
-                cells.forEach(cell => {
-                    const colName = cell.getAttribute('data-column');
-                    if (colName) modifiedColumns.add(colName);
-                });
-
-                tab.tableColumns.forEach(col => {
-                    if (!modifiedColumns.has(col)) {
-                        let value = originalRow[col];
-                        // Convert objects to JSON string
-                        if (typeof value === 'object' && value !== null) {
-                            value = JSON.stringify(value);
-                        }
-                        conditions[col] = value;
-                    }
-                });
+                const edited = new Set(cells.map(c => c.getAttribute('data-column')));
+                tab.tableColumns.forEach(col => { if (!edited.has(col)) conditions[col] = asValue(originalRow[col]); });
             }
 
-            // Build update data from modified cells
+            const data = {}, expected = {};
             cells.forEach(cell => {
-                const colName = cell.getAttribute('data-column');
-                if (!colName) return;
-
-                // Check if this is a JSON/long-text cell with data stored in jsonDataStore
-                const jsonIcon = cell.querySelector('.json-view-icon');
-                if (jsonIcon) {
-                    const jsonId = jsonIcon.getAttribute('data-json-id');
-                    if (jsonId && this.jsonDataStore.has(jsonId)) {
-                        const storedValue = this.jsonDataStore.get(jsonId);
-                        // For JSON objects, convert back to string
-                        if (typeof storedValue === 'object') {
-                            updateData[colName] = JSON.stringify(storedValue);
-                        } else {
-                            updateData[colName] = storedValue;
-                        }
-                        return;
-                    }
-                }
-
-                // Regular editable cell
-                let newValue = cell.textContent.trim();
-                if (newValue === 'NULL' || newValue === '') {
-                    newValue = null;
-                }
-
-                updateData[colName] = newValue;
+                const col = cell.getAttribute('data-column');
+                if (!col) return;
+                data[col] = cellValue(cell);
+                // what the cell held when you loaded it: the save refuses if the database holds something else now
+                if (!cell.querySelector('.json-view-icon')) expected[col] = cell.getAttribute('data-original-value');
             });
-
-            try {
-                const response = await fetch('/api/data', {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        connection_id: activeConn.id,
-                        database: tab.state.database,
-                        table: tab.state.tableName,
-                        conditions: conditions,
-                        data: updateData
-                    })
-                });
-
-                const result = await response.json();
-
-                if (result.success) {
-                    // Update original values and remove modified class
-                    cells.forEach(cell => {
-                        cell.setAttribute('data-original-value', cell.textContent.trim());
-                        cell.classList.remove('modified');
-                    });
-                } else {
-                    const errorMsg = result.error || result.message || 'Unknown error';
-                    console.error('Update failed:', result);
-                    ui.notify(`Failed to update row: ${errorMsg}`);
-                    return;
-                }
-            } catch (error) {
-                console.error('Error updating row:', error);
-                ui.notify(`Error updating row: ${error.message}`);
-                return;
-            }
+            operations.push({ op: 'update', conditions, data, expected });
         }
 
+        const done = await this.sendBatch(tab, activeConn, operations);
+        if (!done) return;
+
         this.toggleSaveButtons(tab, false);
+        await this.loadTableData(tab);   // show what is really in the database now
+        ui.notify(`Saved ${operations.length} change${operations.length === 1 ? '' : 's'}.`, 'success');
+    }
 
-        // Reload table to show fresh data with proper state
-        await this.loadTableData(tab);
+    /**
+     * Send changes as one batch. Returns true when everything was saved. A row someone else changed in the meantime
+     * is shown to the user, who can keep editing or save over it; any other failure is explained and, where the
+     * database cannot roll back, says exactly how far it got.
+     */
+    async sendBatch(tab, conn, operations) {
+        const send = async (force) => {
+            const response = await fetch('/api/data/batch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ connection_id: conn.id, database: tab.state.database, table: tab.state.tableName, operations, force })
+            });
+            return response.json();
+        };
+        const label = (op) => Object.entries(op.conditions || {}).slice(0, 2).map(([k, v]) => `${k} = ${v}`).join(', ') || 'new row';
+        try {
+            let result = await send(false);
+            if (result.conflicts) {
+                const rows = [...new Set(result.conflicts.map(c => c.index))];
+                const lines = result.conflicts.slice(0, 5).map(c => c.actual === null
+                    ? `${label(operations[c.index])}: this row no longer exists`
+                    : `${label(operations[c.index])}: ${c.column} was "${c.expected ?? ''}" when you loaded it, now "${c.actual}"`);
+                const more = result.conflicts.length > 5 ? `\n…and ${result.conflicts.length - 5} more` : '';
+                const agreed = await ui.confirm(
+                    `${rows.length} row${rows.length === 1 ? ' was' : 's were'} changed by someone else while you were editing. Nothing has been saved.\n\n` +
+                    `${lines.join('\n')}${more}\n\nSaving anyway overwrites their change with yours.`,
+                    { title: 'Changed since you loaded it', confirmLabel: 'Save anyway', cancelLabel: 'Keep editing', danger: true });
+                if (!agreed) return false;
+                result = await send(true);
+            }
+            if (result.success) return true;
 
-        ui.notify('Changes saved successfully!');
+            const n = operations.length;
+            if (result.rolled_back === false) {
+                ui.notify(`${result.applied} of ${n} changes were saved before one failed: ${result.error} Reload the table to see what is there now.`, 'error');
+                await this.loadTableData(tab);
+            } else {
+                ui.notify(`Nothing was saved. ${n > 1 && result.failed_at !== undefined ? `Change ${result.failed_at + 1} of ${n} failed: ` : ''}${result.error}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error saving changes:', error);
+            ui.notify(`Could not save: ${error.message}`, 'error');
+        }
+        return false;
     }
 
     /**

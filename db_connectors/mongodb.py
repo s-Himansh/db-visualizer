@@ -24,6 +24,7 @@ class MongoDBConnector(BaseConnector):
     """MongoDB database connector implementation."""
 
     SUPPORTS_PROFILE = False
+    SUPPORTS_TRANSACTIONS = False
 
     def connect(self) -> bool:
         """Establish connection to MongoDB database."""
