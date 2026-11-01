@@ -115,6 +115,12 @@ class SSHTunnel:
 
     def _shutdown(self, keep_port: bool):
         self._stopping.set()
+        try:
+            if self._listener:
+                # On Linux close() alone leaves the port listening while the accept thread is blocked in accept()
+                self._listener.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
         for closer in (self._listener, self._transport):
             try:
                 if closer:
