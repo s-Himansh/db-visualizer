@@ -29,13 +29,16 @@ class SavedQueries {
     }
 
     async load() {
+        const before = JSON.stringify(this.items);
         try {
             const { body } = await this.request('/api/saved-queries');
             if (body.success) this.items = body.queries;
         } catch (error) {
             console.error('Could not load saved queries:', error);
         }
-        if (this.modal.classList.contains('active')) this.render();
+        // Redraw only if something changed. Opening the panel draws what is known and then asks again; redrawing an
+        // identical list replaces the rows under the user's hands, which loses a click in progress and drops keyboard focus.
+        if (this.modal.classList.contains('active') && JSON.stringify(this.items) !== before) this.render();
     }
 
     // ---- saving the query in a tab ----------------------------------------------------------------------
