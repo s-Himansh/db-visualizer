@@ -237,6 +237,12 @@ class RelationsManager {
             return;
         }
 
+        const findButton = root.querySelector('[data-map=find]');
+        findButton.onclick = () => window.app.relationshipFinder.toggle(tab);
+        findButton.disabled = !['sqlite', 'mysql', 'postgresql', 'sqlserver', 'oracle'].includes(
+            (window.app.connectionManager.connections.find(c => c.id === tab.connectionId) || {}).type);
+        root.querySelector('[data-map=refresh]').onclick = () => this.renderMap(tab);
+
         const { nodes, width, height } = RelationsManager.layout(data.relations);
         const NS = 'http://www.w3.org/2000/svg';
         const el = (name, attrs = {}, parent) => {
@@ -248,7 +254,9 @@ class RelationsManager {
 
         const linked = new Set(nodes.keys());
         const unlinked = data.tables.filter(t => !linked.has(t.name));
-        info.textContent = `${data.tables.length} tables, ${data.relations.length} relationship${data.relations.length === 1 ? '' : 's'}`;
+        const inferred = data.relations.filter(r => r.virtual).length;
+        info.textContent = `${data.tables.length} tables, ${data.relations.length} relationship${data.relations.length === 1 ? '' : 's'}` +
+            (inferred ? ` (${inferred} inferred)` : '');
         loose.innerHTML = '';
         if (unlinked.length) {
             const label = document.createElement('span');
@@ -269,7 +277,11 @@ class RelationsManager {
         if (!linked.size) {
             canvas.innerHTML = '<div class="map-empty"><strong>No foreign keys found.</strong><br>' +
                 'This database does not declare relationships between its tables, so there is nothing to draw. ' +
-                'Its tables are listed below.</div>';
+                'Its tables are listed below.<br><br>Tables often point at each other anyway. ' +
+                '<button class="btn btn-sm btn-primary" data-map="find-empty" type="button">Find missing relationships</button></div>';
+            const cta = canvas.querySelector('[data-map=find-empty]');
+            cta.disabled = findButton.disabled;
+            cta.onclick = () => window.app.relationshipFinder.open(tab);
             return;
         }
 
@@ -293,8 +305,9 @@ class RelationsManager {
         for (const r of ordered) {
             const child = nodes.get(r.table), parent = nodes.get(r.referenced_table);
             const d = RelationsManager.route(child, parent, rowY(child, r.column), rowY(parent, r.referenced_column), frame);
-            const path = el('path', { d, class: 'map-edge', 'marker-end': `url(#arrow-${tab.id})` }, edgeLayer);
-            el('title', {}, path).textContent = `${r.table}.${r.column} → ${r.referenced_table}.${r.referenced_column}`;
+            const path = el('path', { d, class: r.virtual ? 'map-edge is-inferred' : 'map-edge', 'marker-end': `url(#arrow-${tab.id})` }, edgeLayer);
+            el('title', {}, path).textContent = `${r.table}.${r.column} → ${r.referenced_table}.${r.referenced_column}` +
+                (r.virtual ? ' (inferred from the data, accepted by you)' : '');
             edges.push({ path, from: r.table, to: r.referenced_table });
         }
 
@@ -336,7 +349,9 @@ class RelationsManager {
         // pan and zoom
         const view = { x: 0, y: 0, k: 1 };
         const apply = () => viewport.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`);
+        let touched = false;      // true once the user has panned or zoomed: then the view is theirs, and a resize leaves it alone
         const zoomAt = (factor, cx, cy) => {
+            touched = true;
             const k = Math.min(2.5, Math.max(0.15, view.k * factor));
             view.x = cx - (cx - view.x) * (k / view.k);
             view.y = cy - (cy - view.y) * (k / view.k);
@@ -344,6 +359,7 @@ class RelationsManager {
             apply();
         };
         const fit = () => {
+            touched = false;
             const box = canvas.getBoundingClientRect();
             viewport.removeAttribute('transform');
             const bb = viewport.getBBox();                       // everything drawn, edges and lanes included
@@ -354,6 +370,7 @@ class RelationsManager {
             apply();
         };
         const centreOn = (name) => {
+            touched = true;
             const n = nodes.get(name), box = canvas.getBoundingClientRect();
             view.k = Math.max(view.k, 0.9);
             view.x = box.width / 2 - (n.x + R.NODE_W / 2) * view.k;
@@ -375,7 +392,7 @@ class RelationsManager {
             if (!drag) return;
             const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
             if (Math.abs(dx) + Math.abs(dy) > 4) { drag.moved = true; svg.dataset.dragged = '1'; }
-            if (drag.moved) { view.x = drag.vx + dx; view.y = drag.vy + dy; apply(); }
+            if (drag.moved) { touched = true; view.x = drag.vx + dx; view.y = drag.vy + dy; apply(); }
         }, { signal });
         window.addEventListener('mouseup', () => { drag = null; setTimeout(() => delete svg.dataset.dragged, 0); }, { signal });
 
@@ -383,7 +400,6 @@ class RelationsManager {
         root.querySelector('[data-map=fit]').onclick = fit;
         root.querySelector('[data-map=zoom-in]').onclick = () => zoomAt(1.25, box.width / 2, box.height / 2);
         root.querySelector('[data-map=zoom-out]').onclick = () => zoomAt(0.8, box.width / 2, box.height / 2);
-        root.querySelector('[data-map=refresh]').onclick = () => this.renderMap(tab);
 
         const search = root.querySelector('.map-search');
         const doSearch = () => {
@@ -397,6 +413,15 @@ class RelationsManager {
         search.oninput = doSearch;
         search.onkeydown = (e) => { if (e.key === 'Enter') { const first = doSearch(); if (first) centreOn(first); } };
         search.value = '';
+
+        // Fitting happens once, when the map is drawn. When its area changes afterwards (the suggestions panel opening or
+        // closing, the window resizing, the tab becoming visible) re-fit, unless the user has moved the view themselves.
+        const watcher = new ResizeObserver(() => {
+            const box = canvas.getBoundingClientRect();
+            if (!touched && canvas.isConnected && box.width > 50 && box.height > 50) fit();
+        });
+        watcher.observe(canvas);
+        signal.addEventListener('abort', () => watcher.disconnect());
 
         requestAnimationFrame(() => { fit(); svg.dataset.ready = '1'; });
     }

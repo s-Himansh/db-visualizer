@@ -1,5 +1,9 @@
 """A small online-shop database for first-run exploration: it has real relationships (including a table that points
-at itself), so the schema map and link-following have something to show. Deterministic: same data every time."""
+at itself), so the schema map and link-following have something to show.
+
+It also has four add-on tables (support tickets, wishlists, coupon redemptions, affiliate clicks) whose links to the
+rest of the shop are NOT declared, the way tables added later by another team often are. That is what "Find missing
+relationships" on the schema map is for. Deterministic: same data every time."""
 import random
 import sqlite3
 from pathlib import Path
@@ -54,6 +58,33 @@ CREATE TABLE reviews (
     rating INTEGER NOT NULL,
     body TEXT
 );
+-- add-ons: columns that point at other tables, but nothing says so
+CREATE TABLE support_tickets (
+    id INTEGER PRIMARY KEY,
+    customer_id INTEGER,
+    order_id INTEGER,
+    subject TEXT NOT NULL,
+    status TEXT NOT NULL,
+    opened_at TEXT
+);
+CREATE TABLE wishlists (
+    id INTEGER PRIMARY KEY,
+    customer_id INTEGER NOT NULL,
+    product_id INTEGER NOT NULL,
+    added_at TEXT
+);
+CREATE TABLE coupon_redemptions (
+    id INTEGER PRIMARY KEY,
+    order_id INTEGER NOT NULL,
+    coupon_code TEXT NOT NULL,
+    discount REAL NOT NULL
+);
+CREATE TABLE affiliate_clicks (
+    id INTEGER PRIMARY KEY,
+    customer_id INTEGER,
+    partner TEXT NOT NULL,
+    clicked_at TEXT
+);
 CREATE INDEX idx_orders_customer ON orders(customer_id);
 CREATE INDEX idx_items_order ON order_items(order_id);
 CREATE INDEX idx_reviews_product ON reviews(product_id);
@@ -78,6 +109,10 @@ FIRST = ['Ava', 'Liam', 'Noah', 'Mia', 'Ethan', 'Zoe', 'Omar', 'Isla', 'Leo', 'N
 LAST = ['Chen', 'Patel', 'Garcia', 'Rossi', 'Kim', 'Müller', 'Haddad', 'Novak', 'Silva', 'Okafor', 'Sharma', 'Dubois',
         'Tanaka', 'Mensah', 'Berg', 'Kapoor', 'Reyes', 'Sato', 'Weber', 'Nasser']
 COUNTRIES = ['IN', 'US', 'DE', 'BR', 'NG', 'JP', 'FR', 'GB']
+SUBJECTS = ['Where is my order?', 'Item arrived damaged', 'Wrong size', 'Refund request', 'Change delivery address',
+            'Missing part', 'Question about warranty']
+COUPONS = ['WELCOME10', 'SPRING15', 'FREESHIP', 'VIP20']
+PARTNERS = ['DealHub', 'PriceWatch', 'CouponCrowd']
 STATUSES = ['delivered'] * 6 + ['shipped'] * 2 + ['processing', 'cancelled']
 CARRIERS = ['DHL', 'UPS', 'FedEx', 'BlueDart']
 REVIEWS = ['Does exactly what it says.', 'Arrived quickly, well packed.', 'A bit pricey but worth it.', 'Broke after a month.',
@@ -128,6 +163,22 @@ def build_sample(path) -> Path:
     for i in range(1, 181):
         db.execute('INSERT INTO reviews VALUES (?,?,?,?,?)',
                    (i, rnd.randint(1, len(PRODUCTS)), rnd.randint(1, 120), rnd.randint(1, 5), rnd.choice(REVIEWS)))
+
+    # the add-ons (generated after everything above, so the shop's own data is the same as before)
+    for i in range(1, 61):
+        has_order = rnd.random() < 0.75
+        db.execute('INSERT INTO support_tickets VALUES (?,?,?,?,?,?)', (
+            i, rnd.randint(1, 120), rnd.randint(1, order_id) if has_order else None, rnd.choice(SUBJECTS),
+            rnd.choice(['open', 'open', 'solved', 'solved', 'solved']), day(rnd.randint(0, 220))))
+    for i in range(1, 151):
+        db.execute('INSERT INTO wishlists VALUES (?,?,?,?)', (i, rnd.randint(1, 120), rnd.randint(1, len(PRODUCTS)), day(rnd.randint(0, 220))))
+    for i in range(1, 81):
+        # a few redemptions refer to orders that were later deleted
+        db.execute('INSERT INTO coupon_redemptions VALUES (?,?,?,?)', (
+            i, rnd.randint(1, order_id) if i % 10 else order_id + rnd.randint(1, 60), rnd.choice(COUPONS), round(rnd.uniform(2, 40), 2)))
+    for i in range(1, 41):
+        # a partner's own ids, not ours: the column is called customer_id but does not point at our customers
+        db.execute('INSERT INTO affiliate_clicks VALUES (?,?,?,?)', (i, 90000 + rnd.randint(1, 500), rnd.choice(PARTNERS), day(rnd.randint(0, 220))))
     db.commit()
     db.close()
     tmp.replace(path)

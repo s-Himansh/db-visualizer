@@ -132,6 +132,17 @@ def page(browser, server, demo_db):
     assert pg.native_dialogs == [], f'native browser dialogs appeared: {pg.native_dialogs}'
 
 
+def open_query_tab(pg):
+    """Click New query and wait until the NEW tab's own editor is the one on screen.
+
+    Waiting for any `.tab-content.active .CodeMirror` is not enough: for a moment after the click the previous tab's
+    editor still matches, so a test can type into the wrong tab. Under load that made tests fail now and then."""
+    before = pg.evaluate('app.tabManager.activeTabId')
+    pg.click('#new-query-tab-btn')
+    pg.wait_for_function("""b => { const tm = app.tabManager; const t = tm.tabs.get(tm.activeTabId);
+        return tm.activeTabId !== b && t && t.editor && document.querySelector('.tab-content.active .CodeMirror') === t.editor.getWrapperElement(); }""", arg=before)
+
+
 def answer_dialogs(pg, accept):
     pg.evaluate(f'window.__dialogAnswer = {"true" if accept else "false"}')
 

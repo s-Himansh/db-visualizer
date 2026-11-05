@@ -417,6 +417,18 @@ class BaseConnector(ABC):
         finally:
             self._batch = False
 
+    def check_reference(self, child: str, child_column: str, parent: str, parent_column: str,
+                        database: Optional[str] = None, sample: int = 2000) -> Dict[str, int]:
+        """How many of the distinct values in the first `sample` non-empty rows of child.column exist in parent.column.
+        Returns {'distinct': n, 'matched': m}. Used to test whether a relationship that is not declared really holds."""
+        self._prepare(database)
+        c, p = self.q(child_column), self.q(parent_column)
+        first_rows = self._capped(f'{c} AS v', f'{self.table_ref(child, database)} WHERE {c} IS NOT NULL', int(sample))
+        distinct, matched = self._fetch(
+            f'SELECT COUNT(*), COUNT(par.{p}) FROM (SELECT DISTINCT v FROM ({first_rows}) s) c '
+            f'LEFT JOIN {self.table_ref(parent, database)} par ON par.{p} = c.v')[0]
+        return {'distinct': int(distinct), 'matched': int(matched)}
+
     def import_session(self):
         """A context manager around a CSV import. The default does nothing; Oracle uses it to accept ISO dates."""
         return contextlib.nullcontext()

@@ -1,7 +1,7 @@
 """Saved queries, through the real UI."""
 import pytest
 
-from conftest import manual_dialogs
+from conftest import manual_dialogs, open_query_tab
 
 pytestmark = pytest.mark.e2e
 
@@ -14,6 +14,8 @@ LIST = "async () => (await (await fetch('/api/saved-queries')).json()).queries"
 
 @pytest.fixture(autouse=True)
 def clean(page):
+    # No dialog slide-in: Playwright waits for a moving button to hold still, which starves under load.
+    page.emulate_media(reduced_motion='reduce')
     page.evaluate(PURGE)
     yield
     page.evaluate(PURGE)
@@ -34,8 +36,7 @@ def eventually(pg, check, what):
 
 
 def new_query(pg, sql=''):
-    pg.click('#new-query-tab-btn')
-    pg.wait_for_selector('.tab-content.active .CodeMirror')
+    open_query_tab(pg)
     pg.evaluate("sql => document.querySelector('.tab-content.active .CodeMirror').CodeMirror.setValue(sql)", sql)
 
 
@@ -316,3 +317,32 @@ def test_hostile_names_and_sql_stay_plain_text(connected):
     connected.keyboard.press('Meta+k')
     connected.fill('.palette-input', 'img')
     assert connected.evaluate("window.__pwned") is None
+
+
+# ---- the list is not thrown away and redrawn when nothing changed -----------------------------------------------------------------------------
+
+def test_a_slow_refresh_does_not_redraw_the_list_under_your_hands(connected):
+    """Opening the panel draws what is known and asks the server again. If the answer is the same, the rows must stay:
+    a redraw loses a click that is already in progress and drops keyboard focus."""
+    keep(connected, 'one', 'select 1')
+    keep(connected, 'two', 'select 2')
+    new_query(connected, '')
+    connected.route('**/api/saved-queries', lambda route: (connected.wait_for_timeout(900), route.continue_()) if route.request.method == 'GET' else route.continue_())
+    open_panel(connected)
+    connected.evaluate("""() => { const row = document.querySelector('#saved-queries-list .saved-main'); window.__row = row; row.focus(); }""")
+    connected.wait_for_timeout(1700)                                          # the slow answer has arrived by now
+    assert connected.evaluate("window.__row.isConnected") is True              # the very same row is still on the page
+    assert connected.evaluate("document.activeElement === window.__row") is True   # and still has the keyboard focus
+    connected.keyboard.press('Enter')
+    connected.wait_for_selector('#saved-queries-modal.active', state='hidden')
+    assert editor_text(connected) in ('select 1', 'select 2')
+
+
+def test_the_list_does_redraw_when_something_really_changed(connected):
+    keep(connected, 'one', 'select 1')
+    new_query(connected, '')
+    open_panel(connected)
+    assert names_in_panel(connected) == ['one']
+    connected.evaluate("fetch('/api/saved-queries', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: 'added elsewhere', sql: 'select 9'})})")
+    connected.evaluate("app.savedQueries.load()")                              # as if the panel were opened again
+    connected.wait_for_function("document.querySelectorAll('#saved-queries-list .saved-name').length === 2")

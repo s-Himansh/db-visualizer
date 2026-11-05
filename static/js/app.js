@@ -29,6 +29,7 @@ class DatabaseVisualizer {
         this.savedQueries = new SavedQueries();
         this.csvImporter = new CsvImporter();
         this.relations = new RelationsManager();
+        this.relationshipFinder = new RelationshipFinder();
         this.palette = new CommandPalette();
         this.insights = new ColumnInsights();
         this.assistant = new AIAssistant();
