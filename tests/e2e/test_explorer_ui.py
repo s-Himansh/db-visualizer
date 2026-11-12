@@ -71,3 +71,12 @@ def test_row_values_are_shown_as_plain_text(connected):
     explore(connected, 6)                                      # customer 7 is named  O'Brien <b>
     connected.wait_for_function("document.querySelector('#explorer-title').textContent.includes('<b>')")
     assert connected.locator('#explorer-title b').count() == 0
+
+
+def test_rows_list_their_columns_in_the_tables_own_order(connected):
+    open_table(connected, 'customers')
+    connected.wait_for_selector('.tab-content.active td.ref')
+    explore(connected, 1)
+    connected.wait_for_selector('#explorer-body .explore-group')
+    first = connected.locator('#explorer-body .explore-group').filter(has_text='orders').locator('.explore-row').first.inner_text()
+    assert first.startswith('id 1 · customer_id 2')            # orders is (id, customer_id, total, status), not alphabetical
