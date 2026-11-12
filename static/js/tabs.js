@@ -313,6 +313,7 @@ class TabManager {
                 <div class="results-container">
                     <div class="results-toolbar">
                         <span class="results-info" id="results-info-${tab.id}">Ready</span>
+                        <span class="results-note" title="Open the table from the sidebar to edit its rows">Results are read-only</span>
                         <div class="table-search-controls" id="results-search-controls-${tab.id}" style="display: none;">
                             <input type="text" class="table-search-input" id="results-search-${tab.id}" placeholder="Search results">
                             <select class="table-search-columns" id="results-search-columns-${tab.id}">
@@ -1271,7 +1272,6 @@ class TabManager {
             } else {
                 // All rows rendered - attach listeners
                 this.attachJsonCellListeners();
-                this.attachQueryResultEditListeners(tab, resultsGrid);
 
                 // Make columns resizable
                 const table = resultsGrid.querySelector('.data-table');
@@ -1336,7 +1336,6 @@ class TabManager {
             } else {
                 // All rows rendered - attach listeners
                 this.attachJsonCellListeners();
-                this.attachQueryResultEditListeners(tab, resultsGrid);
 
                 // Make columns resizable
                 const table = resultsGrid.querySelector('.data-table');
@@ -1357,7 +1356,7 @@ class TabManager {
 
     renderCellHtml(value, col) {
         if (value === null || value === undefined || value === '') {
-            return `<td class="null editable" contenteditable="true" data-column="${this.escapeHtml(col)}" data-original-value="">NULL</td>`;
+            return `<td class="null" contenteditable="false" data-column="${this.escapeHtml(col)}" data-original-value="">NULL</td>`;
         } else if (typeof value === 'object') {
             // Handle JSON objects - read-only, edit via modal
             const compactJson = JSON.stringify(value);
@@ -1392,7 +1391,7 @@ class TabManager {
                     </td>`;
                 } else {
                     // Short regular string
-                    return `<td class="editable" contenteditable="true" data-column="${this.escapeHtml(col)}" data-original-value="${this.escapeHtml(strValue)}" title="${this.escapeHtml(strValue)}">${this.escapeHtml(strValue)}</td>`;
+                    return `<td contenteditable="false" data-column="${this.escapeHtml(col)}" data-original-value="${this.escapeHtml(strValue)}" title="${this.escapeHtml(strValue)}">${this.escapeHtml(strValue)}</td>`;
                 }
             }
 
@@ -1432,57 +1431,9 @@ class TabManager {
                     <span class="json-view-icon" data-json-id="${jsonId}" contenteditable="false" title="View full value">{ }</span>
                 </td>`;
             } else {
-                return `<td class="editable" contenteditable="true" data-column="${this.escapeHtml(col)}" data-original-value="${this.escapeHtml(strValue)}" title="${this.escapeHtml(strValue)}">${this.escapeHtml(strValue)}</td>`;
+                return `<td contenteditable="false" data-column="${this.escapeHtml(col)}" data-original-value="${this.escapeHtml(strValue)}" title="${this.escapeHtml(strValue)}">${this.escapeHtml(strValue)}</td>`;
             }
         }
-    }
-
-    /**
-     * Attach edit listeners to query result cells
-     * @param {object} tab - Tab object
-     * @param {HTMLElement} gridElement - Grid element
-     */
-    attachQueryResultEditListeners(tab, gridElement) {
-        const editableCells = gridElement.querySelectorAll('td.editable');
-
-        editableCells.forEach(cell => {
-            // Clear "NULL" text when focusing on empty cell
-            cell.addEventListener('focus', (e) => {
-                if (e.target.textContent === 'NULL') {
-                    e.target.textContent = '';
-                    e.target.classList.remove('null');
-                }
-            });
-
-            // Track changes on blur (visual feedback only for query results)
-            cell.addEventListener('blur', (e) => {
-                // For cells with json-view-icon, get text from preview span only
-                let newValue;
-                const previewSpan = e.target.querySelector('.json-preview');
-                if (previewSpan) {
-                    // JSON or long text cell - only compare preview text
-                    newValue = previewSpan.textContent.trim();
-                } else {
-                    // Regular cell - use full text content
-                    newValue = e.target.textContent.trim();
-                }
-
-                const originalValue = e.target.getAttribute('data-original-value');
-
-                if (newValue !== originalValue) {
-                    // Mark cell as modified (visual feedback)
-                    e.target.classList.add('modified');
-                } else {
-                    e.target.classList.remove('modified');
-                }
-
-                // If empty, show NULL (only for non-JSON cells)
-                if (newValue === '' && !previewSpan) {
-                    e.target.textContent = 'NULL';
-                    e.target.classList.add('null');
-                }
-            });
-        });
     }
 
     /**
@@ -1685,7 +1636,7 @@ class TabManager {
                 const jsonData = this.jsonDataStore.get(jsonId);
                 const cell = icon.closest('td');
                 if (jsonData) {
-                    this.showEditableJsonModal(jsonData, jsonId, cell);
+                    this.showEditableJsonModal(jsonData, jsonId, cell, true);   // query results are read-only
                 }
             });
         });
@@ -1718,7 +1669,7 @@ class TabManager {
      * @param {string} jsonId - JSON ID in dataStore
      * @param {HTMLElement} cell - The cell element
      */
-    showEditableJsonModal(jsonData, jsonId, cell) {
+    showEditableJsonModal(jsonData, jsonId, cell, readOnly = false) {
         // Create modal
         const modalId = 'json-editor-modal';
         let modal = document.getElementById(modalId);
@@ -1736,19 +1687,19 @@ class TabManager {
         modal.innerHTML = `
             <div class="modal-content modal-large">
                 <div class="modal-header">
-                    <h3>Edit JSON</h3>
+                    <h3>${readOnly ? 'View JSON' : 'Edit JSON'}</h3>
                     <span class="modal-close" data-modal-id="${modalId}">×</span>
                 </div>
                 <div class="modal-body">
                     <div style="margin-bottom: 12px; display: flex; gap: 8px;">
-                        <button class="btn btn-sm" id="json-format-btn">Format</button>
+                        <button class="btn btn-sm" id="json-format-btn"${readOnly ? ' style="display: none;"' : ''}>Format</button>
                         <button class="btn btn-sm" id="json-copy-btn">Copy</button>
                         <input type="text" id="json-search-input" placeholder="Search JSON..." class="form-control" style="flex: 1;">
                     </div>
                     <div id="json-editor-container" style="height: 400px; border: 1px solid var(--line-strong);"></div>
                     <div class="form-actions" style="margin-top: 16px;">
-                        <button class="btn btn-primary" id="json-save-btn">Save Changes</button>
-                        <button class="btn" id="json-cancel-btn">Cancel</button>
+                        <button class="btn btn-primary" id="json-save-btn"${readOnly ? ' style="display: none;"' : ''}>Save Changes</button>
+                        <button class="btn" id="json-cancel-btn">${readOnly ? 'Close' : 'Cancel'}</button>
                     </div>
                 </div>
             </div>
@@ -1765,7 +1716,8 @@ class TabManager {
             lineNumbers: true,
             lineWrapping: true,
             matchBrackets: true,
-            autoCloseBrackets: true
+            autoCloseBrackets: true,
+            readOnly
         });
 
         // Format button
