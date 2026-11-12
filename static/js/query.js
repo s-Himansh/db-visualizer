@@ -155,7 +155,7 @@ class QueryEditor {
                     <div class="modal-header">
                         <h3>JSON Editor</h3>
                         <div style="display: flex; gap: 10px; align-items: center;">
-                            <input type="text" id="json-search-input" placeholder="Search..." class="form-control" style="flex: 1;">
+                            <input type="text" id="json-search-input" placeholder="Search..." class="form-control" style="flex: 1;" autocapitalize="off" autocorrect="off" spellcheck="false">
                             <button class="btn btn-sm" id="format-json-btn">✨ Format</button>
                             <button class="btn btn-sm" id="copy-json-btn">📋 Copy</button>
                             <button class="btn btn-sm btn-primary" id="save-json-btn">💾 Save</button>

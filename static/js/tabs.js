@@ -315,7 +315,7 @@ class TabManager {
                         <span class="results-info" id="results-info-${tab.id}">Ready</span>
                         <span class="results-note" title="Open the table from the sidebar to edit its rows">Results are read-only</span>
                         <div class="table-search-controls" id="results-search-controls-${tab.id}" style="display: none;">
-                            <input type="text" class="table-search-input" id="results-search-${tab.id}" placeholder="Search results">
+                            <input type="text" class="table-search-input" id="results-search-${tab.id}" placeholder="Search results" autocapitalize="off" autocorrect="off" spellcheck="false">
                             <select class="table-search-columns" id="results-search-columns-${tab.id}">
                                 <option value="all">All Columns</option>
                             </select>
@@ -353,7 +353,7 @@ class TabManager {
                         <span class="results-info" id="table-info-${tab.id}">${this.escapeHtml(tab.state.tableName)}</span>
                         <span class="filter-chip" id="filter-chip-${tab.id}" style="display: none;"></span>
                         <div class="table-search-controls">
-                            <input type="text" class="table-search-input" id="table-search-${tab.id}" placeholder="Search this table">
+                            <input type="text" class="table-search-input" id="table-search-${tab.id}" placeholder="Search this table" autocapitalize="off" autocorrect="off" spellcheck="false">
                             <select class="table-search-columns" id="table-search-columns-${tab.id}">
                                 <option value="all">All Columns</option>
                             </select>
@@ -379,7 +379,7 @@ class TabManager {
             contentElement.innerHTML = `
                 <div class="map-container" id="map-${tab.id}">
                     <div class="table-toolbar">
-                        <input type="text" class="table-search-input map-search" placeholder="Find a table" aria-label="Find a table">
+                        <input type="text" class="table-search-input map-search" placeholder="Find a table" aria-label="Find a table" autocapitalize="off" autocorrect="off" spellcheck="false">
                         <button class="btn btn-sm" data-map="fit" title="Fit the whole map in view">Fit</button>
                         <button class="btn btn-sm" data-map="zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
                         <button class="btn btn-sm" data-map="zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
@@ -1694,7 +1694,7 @@ class TabManager {
                     <div style="margin-bottom: 12px; display: flex; gap: 8px;">
                         <button class="btn btn-sm" id="json-format-btn"${readOnly ? ' style="display: none;"' : ''}>Format</button>
                         <button class="btn btn-sm" id="json-copy-btn">Copy</button>
-                        <input type="text" id="json-search-input" placeholder="Search JSON..." class="form-control" style="flex: 1;">
+                        <input type="text" id="json-search-input" placeholder="Search JSON..." class="form-control" style="flex: 1;" autocapitalize="off" autocorrect="off" spellcheck="false">
                     </div>
                     <div id="json-editor-container" style="height: 400px; border: 1px solid var(--line-strong);"></div>
                     <div class="form-actions" style="margin-top: 16px;">
@@ -1776,15 +1776,12 @@ class TabManager {
                 cell.classList.add('modified');
 
                 // Find the active tab and enable save buttons
-                const activeTabId = this.activeTabId;
-                if (activeTabId) {
-                    const activeTab = this.tabs.get(activeTabId);
-                    if (activeTab && activeTab.type === 'table') {
-                        this.toggleSaveButtons(activeTab, true);
-                    }
-                }
+                const activeTab = this.tabs.get(this.activeTabId);
+                if (activeTab && activeTab.type === 'table') this.toggleSaveButtons(activeTab, true);
 
                 modal.classList.remove('active');
+                // Saving here means saving: one click writes it (and any other edit already waiting in this table)
+                if (activeTab && activeTab.type === 'table') this.saveTableChanges(activeTab);
             } catch (e) {
                 ui.notify('Invalid JSON: ' + e.message);
             }

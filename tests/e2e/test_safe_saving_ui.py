@@ -241,8 +241,7 @@ def test_an_edited_json_cell_is_saved(connected):
     open_table(connected, 'customers')
     row = connected.evaluate("() => [...document.querySelectorAll('.tab-content.active tbody tr')].findIndex(tr => tr.querySelector('.json-cell'))")
     assert row >= 0
-    edit_json(connected, row, '{"tier": "silver", "tags": ["x"]}')
-    save(connected)
+    edit_json(connected, row, '{"tier": "silver", "tags": ["x"]}')   # the editor's own Save writes it: no second click
     toast_with(connected, 'Saved 1 change')
     stored = db(connected, 'select meta from customers where id = ?', row + 1)[0][0]
     assert json.loads(stored) == {'tier': 'silver', 'tags': ['x']}
@@ -254,8 +253,21 @@ def test_a_json_edit_and_a_plain_edit_are_saved_together(connected):
     open_table(connected, 'customers')
     row = connected.evaluate("() => [...document.querySelectorAll('.tab-content.active tbody tr')].findIndex(tr => tr.querySelector('.json-cell'))")
     edit(connected, row, 'name', 'Renamed')
-    edit_json(connected, row, '{"tier": "bronze"}')
-    save(connected)
+    edit_json(connected, row, '{"tier": "bronze"}')                  # saving the JSON saves the pending name edit with it
     toast_with(connected, 'Saved 1 change')
     name, meta = db(connected, 'select name, meta from customers where id = ?', row + 1)[0]
     assert name == 'Renamed' and json.loads(meta) == {'tier': 'bronze'}
+
+
+# ---- search boxes ---------------------------------------------------------------------------------------------------------
+
+def test_search_boxes_are_not_auto_capitalised(connected):
+    """The desktop window capitalises the first letter of a text field unless told not to: a search for 'ava' became 'Ava'."""
+    open_table(connected, 'customers')
+    connected.click('#new-query-tab-btn')
+    connected.keyboard.press('Meta+k')
+    connected.wait_for_selector('.palette-input')
+    found = connected.evaluate("""() => [...document.querySelectorAll('input.table-search-input, input.palette-input, #saved-queries-filter')]
+        .map(i => [i.id || i.className, i.getAttribute('autocapitalize'), i.getAttribute('autocorrect')])""")
+    assert len(found) >= 3
+    assert all(cap == 'off' and correct == 'off' for _, cap, correct in found), found

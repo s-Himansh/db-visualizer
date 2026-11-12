@@ -113,7 +113,7 @@ class CommandPalette {
         root.innerHTML = `
             <div class="palette" role="dialog" aria-modal="true" aria-label="Jump to">
                 <input class="palette-input" type="text" placeholder="Jump to a table, connection or action" aria-label="Jump to"
-                       role="combobox" aria-expanded="true" aria-controls="palette-list" autocomplete="off" spellcheck="false">
+                       role="combobox" aria-expanded="true" aria-controls="palette-list" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
                 <div class="palette-list" id="palette-list" role="listbox"></div>
                 <div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> choose</span><span><kbd>Enter</kbd> go</span><span><kbd>Esc</kbd> close</span></div>
             </div>`;
