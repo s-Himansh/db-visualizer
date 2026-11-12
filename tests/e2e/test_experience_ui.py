@@ -202,7 +202,8 @@ def test_switching_connections_switches_the_environment(page):
     page.click('#manage-connections-btn')
     page.click('.connection-item:has-text("Prod DB") .connect-btn')
     page.wait_for_function("document.body.dataset.env === 'production'")
-    page.click('.connection-badge:has-text("Dev DB")')
+    page.click('#switcher-handle')
+    page.click('.switch-row:has-text("Dev DB") .switch-main')
     page.wait_for_function("document.body.dataset.env === 'development'")
 
 

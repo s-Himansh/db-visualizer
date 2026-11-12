@@ -31,6 +31,7 @@ class DatabaseVisualizer {
         this.relations = new RelationsManager();
         this.relationshipFinder = new RelationshipFinder();
         this.explorer = new RecordExplorer();
+        this.switcher = new ConnectionSwitcher();
         this.palette = new CommandPalette();
         this.insights = new ColumnInsights();
         this.assistant = new AIAssistant();

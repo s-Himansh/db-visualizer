@@ -260,6 +260,10 @@ def store_certs(data: Dict, connection_id: str):
                 connection_id, field, data.pop(field), data.pop(field + '_filename'))
 
 
+# Every change to the saved connections reads the list, changes it and writes it back: two at once would undo each other
+CONNECTIONS_LOCK = threading.RLock()
+
+
 def load_connections() -> list:
     """Load saved connections from file."""
     if not CONNECTIONS_FILE.exists():
@@ -773,19 +777,20 @@ def open_sample():
     path = CONFIG_DIR / 'sample' / 'shop.db'
     if not path.exists():
         build_sample(path)
-    connections = load_connections()
-    existing = next((c for c in connections if c.get('sample')), None)
-    if existing:
-        if existing.get('database') != str(path):  # the data folder moved
-            existing['database'] = str(path)
-            save_connections(connections)
-        return jsonify({'success': True, 'id': existing['id']})
-    conn = {'id': next_connection_id(connections), 'name': 'Sample shop', 'type': 'sqlite', 'database': str(path),
-            'environment': 'local', 'sample': True}
-    connections.append(conn)
-    if not save_connections(connections):
-        return jsonify({'success': False, 'error': 'Could not save the sample connection'}), 500
-    return jsonify({'success': True, 'id': conn['id']})
+    with CONNECTIONS_LOCK:
+        connections = load_connections()
+        existing = next((c for c in connections if c.get('sample')), None)
+        if existing:
+            if existing.get('database') != str(path):  # the data folder moved
+                existing['database'] = str(path)
+                save_connections(connections)
+            return jsonify({'success': True, 'id': existing['id']})
+        conn = {'id': next_connection_id(connections), 'name': 'Sample shop', 'type': 'sqlite', 'database': str(path),
+                'environment': 'local', 'sample': True}
+        connections.append(conn)
+        if not save_connections(connections):
+            return jsonify({'success': False, 'error': 'Could not save the sample connection'}), 500
+        return jsonify({'success': True, 'id': conn['id']})
 
 
 @app.route('/api/connections', methods=['GET'])
@@ -812,20 +817,21 @@ def save_connection():
     data = (request.get_json(silent=True) or {})
     if data.get('environment', '') not in ENVIRONMENTS:
         return jsonify({'success': False, 'error': 'Unknown environment'}), 400
-    connections = load_connections()
+    with CONNECTIONS_LOCK:
+        connections = load_connections()
 
-    connection_id = data['id'] if data.get('id') else next_connection_id(connections)
+        connection_id = data['id'] if data.get('id') else next_connection_id(connections)
 
-    data['id'] = connection_id
+        data['id'] = connection_id
 
-    store_certs(data, connection_id)
+        store_certs(data, connection_id)
 
-    connections.append(data)
+        connections.append(data)
 
-    if save_connections(connections):
-        return jsonify({'success': True, 'id': connection_id})
-    else:
-        return jsonify({'success': False, 'error': 'Failed to save connection'}), 500
+        if save_connections(connections):
+            return jsonify({'success': True, 'id': connection_id})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to save connection'}), 500
 
 
 @app.route('/api/connections/<connection_id>', methods=['PUT'])
@@ -834,50 +840,52 @@ def update_connection(connection_id):
     data = (request.get_json(silent=True) or {})
     if data.get('environment', '') not in ENVIRONMENTS:
         return jsonify({'success': False, 'error': 'Unknown environment'}), 400
-    connections = load_connections()
+    with CONNECTIONS_LOCK:
+        connections = load_connections()
 
-    # The edit form never shows the stored password, so a blank/masked one means "unchanged"
-    for field in SECRET_FIELDS:
-        if data.get(field) in (None, '', '***'):
-            data.pop(field, None)
+        # The edit form never shows the stored password, so a blank/masked one means "unchanged"
+        for field in SECRET_FIELDS:
+            if data.get(field) in (None, '', '***'):
+                data.pop(field, None)
 
-    # Find and update connection
-    for i, conn in enumerate(connections):
-        if conn.get('id') == connection_id:
-            store_certs(data, connection_id)
-            connections[i] = {**conn, **data, 'id': connection_id}
-            if save_connections(connections):
-                return jsonify({'success': True})
-            else:
-                return jsonify({'success': False, 'error': 'Failed to update connection'}), 500
+        # Find and update connection
+        for i, conn in enumerate(connections):
+            if conn.get('id') == connection_id:
+                store_certs(data, connection_id)
+                connections[i] = {**conn, **data, 'id': connection_id}
+                if save_connections(connections):
+                    return jsonify({'success': True})
+                else:
+                    return jsonify({'success': False, 'error': 'Failed to update connection'}), 500
 
-    return jsonify({'success': False, 'error': 'Connection not found'}), 404
+        return jsonify({'success': False, 'error': 'Connection not found'}), 404
 
 
 @app.route('/api/connections/<connection_id>', methods=['DELETE'])
 def delete_connection(connection_id):
     """Delete a connection."""
-    connections = load_connections()
+    with CONNECTIONS_LOCK:
+        connections = load_connections()
 
-    # Filter out the connection to delete
-    connections = [conn for conn in connections if conn.get('id') != connection_id]
+        # Filter out the connection to delete
+        connections = [conn for conn in connections if conn.get('id') != connection_id]
 
-    # Also disconnect if active
-    if connection_id in active_connections:
-        try:
-            active_connections[connection_id].disconnect()
-        except Exception as e:
-            logger.warning("Error disconnecting %s: %s", connection_id, e)
-        active_connections[connection_id].close_tunnel()
-        del active_connections[connection_id]
+        # Also disconnect if active
+        if connection_id in active_connections:
+            try:
+                active_connections[connection_id].disconnect()
+            except Exception as e:
+                logger.warning("Error disconnecting %s: %s", connection_id, e)
+            active_connections[connection_id].close_tunnel()
+            del active_connections[connection_id]
 
-    shutil.rmtree(CERTS_DIR / connection_id, ignore_errors=True)
-    forget_relationship_decisions(connection_id)
+        shutil.rmtree(CERTS_DIR / connection_id, ignore_errors=True)
+        forget_relationship_decisions(connection_id)
 
-    if save_connections(connections):
-        return jsonify({'success': True})
-    else:
-        return jsonify({'success': False, 'error': 'Failed to delete connection'}), 500
+        if save_connections(connections):
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to delete connection'}), 500
 
 
 @app.route('/api/connect', methods=['POST'])

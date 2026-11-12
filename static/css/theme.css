@@ -973,3 +973,33 @@ body[data-env="production"] .status-bar::after { content: 'PRODUCTION'; margin-l
 .explore-row, .explore-all { display: block; width: 100%; padding: 7px 12px; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .explore-row:hover, .explore-row:focus-visible, .explore-all:hover, .explore-all:focus-visible { background: var(--accent-wash); }
 .explore-all { color: var(--accent); }
+
+/* ---------- open connections: edge handle and slide-over panel (nothing is resized) ---------- */
+#switcher-handle { position: fixed; left: 0; top: 0; bottom: 0; width: 10px; padding: 12px 0 0; border: 0; background: transparent; display: flex; flex-direction: column; align-items: center; gap: 7px; cursor: pointer; z-index: 900; }
+#switcher-handle[hidden] { display: none; }
+#switcher-handle:hover, #switcher-handle:focus-visible { background: var(--accent-wash); }
+.switch-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); opacity: .6; }
+.switch-dot.active { width: 8px; height: 8px; opacity: 1; box-shadow: 0 0 0 2px var(--accent-wash); }
+.switch-dot.env-production { background: var(--danger); }
+#switcher-panel { position: fixed; left: 0; top: 0; bottom: 0; width: 270px; z-index: 950; padding: 12px 8px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto;
+    background: var(--raised); border-right: 1px solid var(--line-strong); box-shadow: var(--shadow-md);
+    transform: translateX(-102%); visibility: hidden; transition: transform .16s ease, visibility 0s .16s; }
+#switcher-panel.open { transform: none; visibility: visible; transition-delay: 0s; }
+.switch-title { padding: 2px 8px 8px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+.switch-row { display: flex; align-items: center; border-radius: var(--radius); }
+.switch-row:hover, .switch-row:focus-within { background: var(--raised-hover); }
+.switch-row.active { background: var(--accent-wash); }
+.switch-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px; padding: 6px 8px; border: 0; background: none; color: var(--text); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; border-radius: var(--radius); }
+.switch-row.active .switch-main { color: var(--text-strong); }
+.switch-avatar { flex: none; width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; }
+.switch-avatar.env-production { box-shadow: inset 0 0 0 2px var(--danger); }
+.switch-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.switch-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.switch-tags { display: flex; gap: 4px; }
+.switch-tags:empty { display: none; }
+.switch-key { flex: none; font-size: 10.5px; color: var(--faint); }
+.switch-close { flex: none; width: 26px; height: 26px; margin-right: 4px; border: 0; background: none; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; border-radius: 6px; opacity: 0; }
+.switch-row:hover .switch-close, .switch-close:focus-visible { opacity: 1; }
+.switch-close:hover { background: var(--raised-hover); color: var(--text-strong); }
+.switch-add { margin-top: 6px; padding: 7px 8px; border: 1px dashed var(--line-strong); border-radius: var(--radius); background: none; color: var(--muted); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; }
+.switch-add:hover, .switch-add:focus-visible { background: var(--raised-hover); color: var(--text-strong); }

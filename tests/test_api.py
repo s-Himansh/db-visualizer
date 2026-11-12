@@ -415,3 +415,35 @@ def test_batch_needs_a_connection(client):
 def test_the_single_row_endpoints_no_longer_claim_success_for_nothing(client, conn_id, sqlite_path):
     r = client.put('/api/data', json={'connection_id': conn_id, 'table': 't', 'conditions': {'id': 999}, 'data': {'name': 'x'}})
     assert r.get_json()['success'] is False and 'matched' in r.get_json()['error']
+
+
+def test_deleting_several_connections_at_once_deletes_them_all(client):
+    """Each delete reads the saved list, drops one and writes it back: without a lock two at once undo each other."""
+    from concurrent.futures import ThreadPoolExecutor
+    ids = [client.post('/api/connections', json={'name': f'c{i}', 'type': 'sqlite', 'database': ':memory:'}).get_json()['id'] for i in range(12)]
+    assert len(set(ids)) == 12
+
+    def delete(connection_id):
+        c = db.app.test_client()
+        c.environ_base['HTTP_X_DBV_TOKEN'] = db.APP_TOKEN
+        return c.delete(f'/api/connections/{connection_id}').status_code
+
+    with ThreadPoolExecutor(12) as pool:
+        assert set(pool.map(delete, ids)) == {200}
+    assert client.get('/api/connections').get_json()['connections'] == []
+
+
+def test_saving_several_connections_at_once_keeps_them_all(client):
+    from concurrent.futures import ThreadPoolExecutor
+
+    def save(i):
+        c = db.app.test_client()
+        c.environ_base['HTTP_X_DBV_TOKEN'] = db.APP_TOKEN
+        return c.post('/api/connections', json={'name': f'n{i}', 'type': 'sqlite', 'database': ':memory:'}).get_json()['id']
+
+    with ThreadPoolExecutor(12) as pool:
+        ids = list(pool.map(save, range(12)))
+    saved = client.get('/api/connections').get_json()['connections']
+    assert len(set(ids)) == 12 and sorted(c['name'] for c in saved) == sorted(f'n{i}' for i in range(12))
+    for connection_id in ids:
+        client.delete(f'/api/connections/{connection_id}')
