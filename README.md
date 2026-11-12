@@ -29,7 +29,7 @@ A desktop app for browsing and editing SQL and NoSQL databases, with guard rails
 ./run.sh
 ```
 
-No database handy? Click **Try a sample database** on the first screen. It opens a small online shop you can't hurt.
+No database handy? Click **Try a sample database** on the first screen. It opens a small online shop you can't hurt. It includes four add-on tables whose links to the rest of the shop are *not* declared, so you can try **Find missing relationships** on the Schema map and see what it finds, and what it refuses.
 
 <details>
 <summary><b>Install by hand</b> (if you don't want the script)</summary>
@@ -114,6 +114,14 @@ Describe a query in plain English and Claude writes it into the editor. It only 
 </td>
 </tr>
 
+<tr>
+<td colspan="2" valign="top">
+
+### 🧩 Missing relationships
+Many databases have no foreign keys at all, so most tools can't draw or follow anything. **Find missing relationships** on the Schema map reads column names (`orders.customer_id` looks like it points at `customers`) and **checks them against the data**: how many of its values really exist in the other table. Accept a suggestion and it works like a foreign key here: the ↗ and ↘ links in the grid, and a dashed edge on the map. Your database is never changed. [How it decides](#-how-missing-relationships-are-found).
+
+</td>
+</tr>
 </table>
 
 Also in the box: SSH tunnels, read-only connections, a query editor with autocomplete, a data grid with search, sorting and paging, a schema viewer, CSV/JSON export, query history, and **light and dark themes**: the button in the top bar cycles *System* (follows your computer), *Light* and *Dark*, and your choice is remembered.
@@ -156,7 +164,7 @@ flowchart LR
 | UI | `static/js/` (`app`, `connection`, `query`, `tabs`, `ui`, `palette`, `relations`, `insights`, `assistant`) |
 | SQL assistant | `ai_assistant.py` |
 | Sample shop database | `sample_data.py` |
-| Your data | `~/Library/Application Support/DB Visualizer` (saved connections, saved queries, `app.log`, known SSH hosts) |
+| Your data | `~/Library/Application Support/DB Visualizer` (saved connections, saved queries, accepted relationships, `app.log`, known SSH hosts) |
 
 </details>
 
@@ -231,6 +239,21 @@ sequenceDiagram
 - Column names in the file are never put into SQL: only columns that really exist in the table can be filled.
 - Speed: roughly 2,000 rows in 1 to 4 seconds on a local database, so a full 10,000-row file takes up to about 20 seconds. Over a slow network it takes longer.
 - A check on a table with an auto-numbered key can use up some of the numbers, because databases don't give those back after a rollback.
+
+### 🧩 How missing relationships are found
+
+For every column whose name looks like a reference to another table, three things have to agree before anything is suggested:
+
+1. **The name.** `customer_id`, `CustomerID`, `customerKey` and `customer_uuid` hint at a table called `customers` (or `customer`). A bare `id`, or a name that matches no table, is never guessed at. Views are skipped, since they take their relationships from their tables.
+2. **The type.** Numbers are compared with numbers and text with text.
+3. **The data.** The first 2,000 non-empty rows of the column are checked against the other table's key, which must be a single-column primary key or unique index. At least 70% of the distinct values must exist there. A column where every value exists is **high** confidence if there are 20 or more different values; with fewer values, or with some that point at nothing ("orphans"), it is marked lower and says why.
+
+You see the evidence for each one ("All 60 distinct values exist in customers.id", or "48 of 68 values exist, 20 point at nothing") and choose **Accept** or **Ignore**. Ignored suggestions stay ignored; both decisions can be undone from the panel. They are stored in the app's data folder, per connection, and are removed when you delete the connection.
+
+- It samples rather than scans, stops after 25 seconds, and says so if it was cut short.
+- It works with SQLite, PostgreSQL, MySQL, SQL Server and Oracle. It only finds relationships between a column and a table's *single-column* key, not composite keys.
+- Only names that follow the `table_id` style are found: a column like `referred_by` or `owner` points at something, but nothing in its name says what.
+- It samples the *first* rows, so a table whose early rows are unrepresentative can mislead it: that is why you decide.
 
 ---
 

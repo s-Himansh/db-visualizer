@@ -188,6 +188,24 @@ def screens(pg):
     yield 'the name prompt with its error'
     pg.keyboard.press('Escape')
     pg.wait_for_selector('.app-dialog', state='detached')
+    import sqlite3
+    c = sqlite3.connect(pg.demo_db)
+    c.execute('create table audit_log(id integer primary key, order_id integer, note text)')
+    c.executemany('insert into audit_log values(?,?,?)', [(i, i, 'checked') for i in range(1, 60)])
+    c.commit()
+    c.close()
+    pg.click('#refresh-btn')
+    pg.wait_for_selector('#tables-content .tree-label:text-is("audit_log")')
+    pg.click('#open-map-btn')
+    pg.wait_for_selector('.tab-content.active .map-svg[data-ready]')
+    pg.click('.tab-content.active [data-map=find]')
+    pg.wait_for_selector('.tab-content.active .map-suggest-item')
+    yield 'relationship suggestions'
+    pg.click('.tab-content.active .map-suggest-item [data-act=accept]')
+    pg.wait_for_selector('.tab-content.active .map-edge.is-inferred', state='attached')
+    pg.wait_for_selector('.tab-content.active .map-suggest-decided')
+    pg.click('.tab-content.active .map-suggest-decided summary')
+    yield 'an accepted inferred relationship'
     import os, tempfile
     folder = tempfile.mkdtemp()
     open_table(pg, 'orders')
@@ -253,3 +271,45 @@ def test_production_banner_and_environment_colours_are_readable_in_light(connect
     use(connected, 'light')
     found = {'production': audit(connected)} if audit(connected) else {}
     assert not found, report(found)
+
+
+# ---- states a scan of the page at rest never sees ---------------------------------------------------------------------------------
+
+LUMINANCE = """(el) => { const c = getComputedStyle(el); const m = c.backgroundColor.match(/rgba?\\(([^)]+)\\)/); const p = m[1].split(/[ ,\\/]+/).filter(Boolean).map(Number);
+  const f = v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); };
+  return {lum: .2126 * f(p[0]) + .7152 * f(p[1]) + .0722 * f(p[2]), alpha: p.length > 3 ? p[3] : 1, color: c.backgroundColor}; }"""
+
+
+def look(pg, selector):
+    return pg.eval_on_selector(selector, LUMINANCE)
+
+
+def test_hovering_a_grid_row_does_not_turn_it_dark_in_light(connected):
+    use(connected, 'light')
+    open_table(connected, 'customers')
+    connected.hover('.tab-content.active .data-table tbody tr:nth-child(3)')
+    connected.wait_for_timeout(250)
+    seen = look(connected, '.tab-content.active .data-table tbody tr:nth-child(3)')
+    assert seen['lum'] > 0.6, f"a hovered row is {seen['color']}"
+    use(connected, 'dark')
+    connected.hover('.tab-content.active .data-table tbody tr:nth-child(4)')
+    connected.wait_for_timeout(250)
+    assert look(connected, '.tab-content.active .data-table tbody tr:nth-child(4)')['lum'] < 0.1       # and still dark in dark
+
+
+def test_hovering_a_button_and_focusing_a_field_stay_light_in_light(connected):
+    use(connected, 'light')
+    connected.hover('#new-query-tab-btn')
+    connected.wait_for_timeout(250)
+    assert look(connected, '#new-query-tab-btn')['lum'] > 0.35
+    connected.click('#manage-connections-btn')
+    connected.click('#new-connection-btn-manager')
+    connected.focus('input[name=name]')
+    connected.wait_for_timeout(250)
+    assert look(connected, 'input[name=name]')['lum'] > 0.8
+
+
+def test_json_values_are_readable_in_light(connected):
+    use(connected, 'light')
+    open_table(connected, 'customers')
+    assert audit(connected, 3.0) == []

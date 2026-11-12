@@ -382,9 +382,11 @@ class TabManager {
                         <button class="btn btn-sm" data-map="zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
                         <button class="btn btn-sm" data-map="zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
                         <button class="btn btn-sm" data-map="refresh" title="Read the relationships again">Refresh</button>
+                        <button class="btn btn-sm" data-map="find" title="Look for relationships this database never declared, using column names and the data">Find missing relationships</button>
                         <span class="results-info map-info"></span>
                         <span class="map-hint">Scroll to zoom, drag to pan, click a table to open it</span>
                     </div>
+                    <div class="map-suggest" style="display: none;"></div>
                     <div class="map-canvas"></div>
                     <div class="map-loose"></div>
                 </div>`;

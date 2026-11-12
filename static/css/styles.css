@@ -610,7 +610,7 @@ body.col-resizing {
 }
 
 .data-table tbody tr:hover {
-    background-color: #2d2d2d !important;
+    background-color: var(--lg-row-hover) !important;
 }
 
 .data-table td {
@@ -739,7 +739,7 @@ body.col-resizing {
 }
 
 .json-boolean {
-    color: #569cd6;
+    color: var(--lg-json-bool);
 }
 
 .json-null {
