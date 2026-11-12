@@ -19,17 +19,51 @@ class RecordExplorer {
         });
     }
 
-    async open(tab, table, row) {
+    // `extra`: relationships to follow besides the known ones, such as a suggestion the user is still looking at
+    async open(tab, table, row, extra = []) {
         this.ctx = { tab, relations: [] };
         this.trail = [];
         this.modal.classList.add('active');
         try {
-            this.ctx.relations = (await window.app.relations.load(tab.connectionId, tab.state.database)).relations;
+            this.ctx.relations = [...(await window.app.relations.load(tab.connectionId, tab.state.database)).relations, ...extra];
         } catch (err) {
             this.body.replaceChildren(this.note(err.message));
             return;
         }
         this.show(table, row);
+    }
+
+    // The server's row objects come back with their keys sorted; the column list keeps the table's own order.
+    static inColumnOrder(data) {
+        return data.rows.map(r => Object.fromEntries(data.columns.map(c => [c, r[c]])));
+    }
+
+    // The rows of `table` that point at nothing: pick one to explore it.
+    async openOrphans(tab, s) {
+        this.ctx = { tab, relations: [] };
+        this.trail = [];
+        this.back.hidden = true;
+        this.title.textContent = `${s.table}.${s.column} points at nothing`;
+        this.body.replaceChildren(this.note('Looking for the rows…'));
+        this.modal.classList.add('active');
+        const query = new URLSearchParams({ connection_id: tab.connectionId, database: tab.state.database ?? '',
+            table: s.table, column: s.column, referenced_table: s.referenced_table, referenced_column: s.referenced_column });
+        try {
+            const body = await (await fetch(`/api/relations/orphans?${query}`)).json();
+            if (!body.success) throw new Error(body.error || 'Could not read the rows');
+            const rows = RecordExplorer.inColumnOrder(body.data);
+            const parts = [this.note(`${body.data.total_count.toLocaleString()} row${body.data.total_count === 1 ? ' has' : 's have'} a ${s.column} with no match in ${s.referenced_table}.` +
+                (body.data.total_count > rows.length ? ` The first ${rows.length} are shown.` : ''))];
+            for (const row of rows) {
+                const item = this.el('button', 'explore-row', this.summary(row, 5));
+                item.type = 'button';
+                item.addEventListener('click', () => this.open(tab, s.table, row, [s]));
+                parts.push(item);
+            }
+            this.body.replaceChildren(...parts);
+        } catch (err) {
+            this.body.replaceChildren(this.note(err.message));
+        }
     }
 
     close() {
@@ -73,9 +107,7 @@ class RecordExplorer {
         try {
             const body = await (await fetch(`/api/data?${query}`)).json();
             if (!body.success) throw new Error(body.error || 'Could not read the rows');
-            // The server's row objects come back with their keys sorted; the column list keeps the table's own order.
-            const rows = body.data.rows.map(r => Object.fromEntries(body.data.columns.map(c => [c, r[c]])));
-            return { ...link, rows, total: body.data.total_count };
+            return { ...link, rows: RecordExplorer.inColumnOrder(body.data), total: body.data.total_count };
         } catch (err) {
             return { ...link, rows: [], total: 0, error: err.message };
         }

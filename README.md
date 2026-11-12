@@ -120,7 +120,7 @@ Describe a query in plain English and Claude writes it into the editor. It only 
 <td colspan="2" valign="top">
 
 ### 🧩 Missing relationships
-Many databases have no foreign keys at all, so most tools can't draw or follow anything. **Find missing relationships** on the Schema map reads column names (`orders.customer_id` looks like it points at `customers`) and **checks them against the data**: how many of its values really exist in the other table. Accept a suggestion and it works like a foreign key here: the ↗ and ↘ links in the grid, and a dashed edge on the map. Your database is never changed. [How it decides](#-how-missing-relationships-are-found).
+Many databases have no foreign keys at all, so most tools can't draw or follow anything. **Find missing relationships** on the Schema map reads column names (`orders.customer_id` looks like it points at `customers`) and **checks them against the data**: how many of its values really exist in the other table. Accept a suggestion and it works like a foreign key here: the ↗ and ↘ links in the grid, and a dashed edge on the map. Where some values point at nothing, **Show the rows** lists the rows that do, and clicking one explores it. Your database is never changed. [How it decides](#-how-missing-relationships-are-found).
 
 </td>
 </tr>

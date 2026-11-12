@@ -1142,6 +1142,29 @@ def inferred_relations():
     return jsonify({'success': True, **found})
 
 
+ORPHAN_ROWS = 20
+
+
+@app.route('/api/relations/orphans', methods=['GET'])
+def relation_orphans():
+    """The rows of a table whose value in one column has no match in the table it seems to point at."""
+    connection_id = request.args.get('connection_id')
+    connector = get_connector(connection_id)
+    if not connector:
+        return jsonify({'success': False, 'error': 'Not connected'}), 400
+    if not connector.SUPPORTS_PROFILE:
+        return jsonify({'success': False, 'error': 'Finding orphans works with SQL databases.'}), 400
+    database = request.args.get('database')
+    table, column, parent, parent_column = (request.args.get(k) for k in ('table', 'column', 'referenced_table', 'referenced_column'))
+    try:
+        for name, col in ((table, column), (parent, parent_column)):   # names go into SQL: only accept real ones
+            if not name or not col or col not in {c['name'] for c in connector.get_schema(name, database)['columns']}:
+                return jsonify({'success': False, 'error': 'Unknown table or column'}), 400
+        return jsonify({'success': True, 'data': connector.orphan_rows(table, column, parent, parent_column, database, ORPHAN_ROWS)})
+    except Exception as e:
+        return error_response(e)
+
+
 @app.route('/api/relations/decisions', methods=['GET'])
 def list_relation_decisions():
     """What the user has accepted (with the evidence it was accepted on) and ignored, so either can be undone."""
