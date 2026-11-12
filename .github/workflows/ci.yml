@@ -1,12 +1,23 @@
 name: CI
 
+# Pull requests run on the PR; pushes only on main. Without this filter every commit to a PR ran the whole suite twice.
 on:
   push:
+    branches: [main]
   pull_request:
 
+# A newer commit on the same branch makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Browser tests that talk to the Docker databases or the SSH server; every other e2e file runs in the `browser` job.
+env:
+  DOCKER_E2E: tests/e2e/test_real_db_saving.py tests/e2e/test_ui.py tests/e2e/test_ssh_ui.py
+
 jobs:
-  tests:
-    name: Tests (unit, databases, browser)
+  unit:
+    name: Unit and API tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,29 +26,73 @@ jobs:
           python-version: '3.11'
           cache: pip
       # pywebview is only for the desktop window (it needs GTK/Qt on Linux); the tests drive the web app directly.
-      - name: Install dependencies
-        run: |
+      - run: |
+          grep -v '^pywebview' requirements.txt > ci-requirements.txt
+          pip install -r ci-requirements.txt pytest
+      - run: python -m pytest tests --ignore=tests/e2e --ignore=tests/integration -q
+
+  integration:
+    name: Real databases, SSH and their browser tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: |
           grep -v '^pywebview' requirements.txt > ci-requirements.txt
           pip install -r ci-requirements.txt pytest playwright
-          playwright install --with-deps chromium
-      - name: Unit and API tests
-        run: python -m pytest tests --ignore=tests/e2e --ignore=tests/integration -q
-      - name: Create the throwaway SSH test keys
-        run: python tests/ssh_fixture/make_keys.py
+      - name: Cache Chromium
+        id: chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+      - run: playwright install --with-deps chromium
+        if: steps.chromium.outputs.cache-hit != 'true'
+      - run: playwright install-deps chromium
+        if: steps.chromium.outputs.cache-hit == 'true'
+      - run: python tests/ssh_fixture/make_keys.py
       - name: Start test databases and SSH server
         run: docker compose -f docker-compose.test.yml up -d --wait mysql postgres mongodb redis cassandra sqlserver oracle sshd
-      - name: Real-database and SSH tests
-        run: python -m pytest tests/integration -q
-      - name: Browser tests
-        run: python -m pytest tests/e2e -q
+      # Two runs: both folders have a conftest.py that tests import by name, which clash in one pytest process.
+      - run: python -m pytest tests/integration -q
+      - run: python -m pytest $DOCKER_E2E -q
       - name: Show database logs on failure
         if: failure()
         run: docker compose -f docker-compose.test.yml logs --tail=80
 
+  browser:
+    name: Browser tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: |
+          grep -v '^pywebview' requirements.txt > ci-requirements.txt
+          pip install -r ci-requirements.txt pytest playwright pytest-xdist
+      - name: Cache Chromium
+        id: chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+      - run: playwright install --with-deps chromium
+        if: steps.chromium.outputs.cache-hit != 'true'
+      - run: playwright install-deps chromium
+        if: steps.chromium.outputs.cache-hit == 'true'
+      # Each worker starts its own app server on a free port with its own data folder, so two workers do not share state.
+      # Two, not more: browsers compete for CPU on a 4-core runner, and starved tests are what made them flaky.
+      - run: python -m pytest tests/e2e -n 2 -q $(for f in $DOCKER_E2E; do printf -- '--ignore=%s ' "$f"; done)
+
   macos-build:
     name: Build the macOS app (unsigned)
     runs-on: macos-latest
-    needs: tests
+    needs: unit
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
