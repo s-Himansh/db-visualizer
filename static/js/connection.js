@@ -728,8 +728,9 @@ class ConnectionManager {
         // Clear and rebuild badges
         badgesContainer.innerHTML = '';
 
-        // Create badge for each connected database
+        // The top bar names the active connection; the others live in the switcher (switcher.js)
         this.connectedConnections.forEach(connId => {
+            if (this.activeConnection?.id !== connId) return;
             const conn = this.connections.find(c => c.id === connId);
             if (!conn) return;
 
@@ -748,10 +749,10 @@ class ConnectionManager {
                 <span class="connection-close" data-connection-id="${connId}">×</span>
             `;
 
-            // Click to switch
+            // Click to see all the open connections
             badge.addEventListener('click', (e) => {
                 if (!e.target.classList.contains('connection-close')) {
-                    this.switchToConnection(connId);
+                    window.app.switcher.toggle();
                 }
             });
 
@@ -770,6 +771,8 @@ class ConnectionManager {
         if (oldBadge) {
             oldBadge.style.display = 'none';
         }
+
+        if (window.app && window.app.switcher) window.app.switcher.render();
     }
 
     switchToNextConnection() {

@@ -18,3 +18,6 @@ tests/ssh_fixture/id_*
 tests/ssh_fixture/authorized_keys
 # a stray empty file from an early version
 index.htm
+
+# Brainstorming mockups
+.superpowers/
