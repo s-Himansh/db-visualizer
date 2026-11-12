@@ -192,6 +192,41 @@ def test_undo_restores_a_value_that_was_null(connected):
     assert connected.locator('.tab-content.active td.modified').count() == 0
 
 
+# ---- query results are read-only ----------------------------------------------------------------------------------------
+
+def run_query(pg, sql):
+    from conftest import open_query_tab
+    open_query_tab(pg)
+    pg.evaluate("sql => document.querySelector('.tab-content.active .CodeMirror').CodeMirror.setValue(sql)", sql)
+    pg.keyboard.press('ControlOrMeta+Enter')
+    pg.wait_for_selector('.tab-content.active .results-grid td[data-column]')
+
+
+def test_query_results_cannot_be_edited(connected):
+    run_query(connected, 'select id, name, meta from customers order by id')
+    grid = '.tab-content.active .results-grid'
+    assert connected.locator(f'{grid} [contenteditable=true]').count() == 0
+    cell = connected.locator(f'{grid} tr[data-row-index="0"] td[data-column=name]')
+    before = cell.inner_text()
+    cell.click()
+    connected.keyboard.type('typed into a result')
+    assert cell.inner_text() == before
+    assert connected.locator(f'{grid} td.modified').count() == 0
+    assert 'read-only' in connected.inner_text('.tab-content.active .results-note')
+
+
+def test_a_json_value_in_a_query_result_opens_a_viewer_that_cannot_save(connected):
+    run_query(connected, 'select id, meta from customers where meta is not null order by id')
+    connected.locator('.tab-content.active .results-grid .json-view-icon').first.click()
+    connected.wait_for_selector('#json-editor-modal.active')
+    assert connected.is_hidden('#json-save-btn') and connected.is_hidden('#json-format-btn')
+    assert connected.evaluate("document.querySelector('#json-editor-container .CodeMirror').CodeMirror.getOption('readOnly')") is True
+    assert 'tier' in connected.inner_text('#json-editor-container')
+    connected.click('#json-cancel-btn')
+    connected.wait_for_selector('#json-editor-modal.active', state='hidden')
+    assert connected.locator('.tab-content.active td.modified').count() == 0
+
+
 # ---- JSON cells -------------------------------------------------------------------------------------------------------
 
 def edit_json(pg, row, text):

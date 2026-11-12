@@ -322,6 +322,7 @@ input[type="checkbox"] { accent-color: var(--accent); }
     align-items: center;
 }
 .results-info { font-size: 12.5px; color: var(--muted); }
+.results-note { margin-left: 10px; font-size: 11.5px; color: var(--faint); }
 .table-toolbar .results-info { font-family: var(--font-data); font-size: 12px; margin: 0 6px; color: var(--text); }
 .pagination-controls { display: flex; align-items: center; gap: 8px; margin-left: 8px; color: var(--muted); font-size: 12px; }
 .database-selector { max-width: 280px; text-overflow: ellipsis; }
