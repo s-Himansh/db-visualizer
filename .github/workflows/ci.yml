@@ -56,7 +56,9 @@ jobs:
       - run: python tests/ssh_fixture/make_keys.py
       - name: Start test databases and SSH server
         run: docker compose -f docker-compose.test.yml up -d --wait mysql postgres mongodb redis cassandra sqlserver oracle sshd
-      - run: python -m pytest tests/integration $DOCKER_E2E -q
+      # Two runs: both folders have a conftest.py that tests import by name, which clash in one pytest process.
+      - run: python -m pytest tests/integration -q
+      - run: python -m pytest $DOCKER_E2E -q
       - name: Show database logs on failure
         if: failure()
         run: docker compose -f docker-compose.test.yml logs --tail=80
