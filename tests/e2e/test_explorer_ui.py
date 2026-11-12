@@ -61,8 +61,7 @@ def test_a_row_with_no_linked_values_says_so(connected):
     open_table(connected, 'items')
     connected.wait_for_selector('.tab-content.active td.fk')
     explore(connected, 3)                                      # item 4 has no order
-    connected.wait_for_selector('#explorer-body .form-hint')
-    assert 'no linked values' in connected.inner_text('#explorer-body')
+    connected.wait_for_function("document.querySelector('#explorer-body').textContent.includes('no linked values')")
 
 
 def test_row_values_are_shown_as_plain_text(connected):
@@ -98,5 +97,4 @@ def test_rows_that_point_at_nothing_can_be_listed_and_explored(page):
     assert rows.count() >= 8
     rows.first.click()
     page.wait_for_function("document.querySelector('#explorer-title').textContent.startsWith('coupon_redemptions:')")
-    page.wait_for_selector('#explorer-body .form-hint')
-    assert 'Nothing found in: orders.id' in page.inner_text('#explorer-body')     # the parent it points at is missing
+    page.wait_for_function("document.querySelector('#explorer-body').textContent.includes('Nothing found in: orders.id')")   # the parent it points at is missing
