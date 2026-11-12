@@ -110,7 +110,7 @@ class ConnectionSwitcher {
         document.querySelectorAll('.table-context-menu').forEach(m => m.remove());
         const menu = this.el('div', 'table-context-menu');
         menu.style.left = Math.min(event.clientX, window.innerWidth - 200) + 'px';
-        menu.style.top = Math.min(event.clientY, window.innerHeight - 80) + 'px';
+        menu.style.top = Math.min(event.clientY, window.innerHeight - 110) + 'px';
         menu.style.zIndex = 1200;
         const item = (label, run) => {
             const el = this.el('div', 'context-menu-item', label);
@@ -118,6 +118,7 @@ class ConnectionSwitcher {
             menu.appendChild(el);
         };
         item('New query', () => { cm.switchToConnection(conn.id); this.hide(); window.app.tabManager.createTab('query', conn.id, { query: '' }); });
+        item('Rename', () => { this.hide(); cm.rename(conn.id); });
         item('Disconnect', () => cm.disconnect(conn.id));
         document.body.appendChild(menu);
         setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 0);

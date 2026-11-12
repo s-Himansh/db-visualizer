@@ -1,7 +1,7 @@
 """Open connections: the edge handle and the panel that slides over the sidebar."""
 import pytest
 
-from conftest import add_sqlite_connection, connect
+from conftest import add_sqlite_connection, connect, manual_dialogs
 
 pytestmark = pytest.mark.e2e
 
@@ -96,3 +96,43 @@ def test_a_hostile_connection_name_stays_plain_text(page):
     assert page.locator('#switcher-panel img').count() == 0
     assert name in page.inner_text('#switcher-panel')
     assert page.evaluate('window.__pwned') is None
+
+
+def rename_from_panel(pg, row, new):
+    manual_dialogs(pg)                                           # the test answers the dialog itself
+    pg.click('#switcher-handle')
+    pg.locator(f'#switcher-panel .switch-row:has-text("{row}")').click(button='right')
+    pg.click('.table-context-menu .context-menu-item:text-is("Rename")')
+    pg.wait_for_selector('.app-dialog-input')
+    pg.fill('.app-dialog-input', new)
+    pg.click('.app-dialog [data-answer=ok]')
+
+
+def test_renaming_the_active_connection_updates_everywhere_and_is_remembered(two):
+    rename_from_panel(two, 'Beta DB', 'Renamed Prod')
+    two.wait_for_function("document.querySelector('.connection-badge.active .connection-name').textContent === 'Renamed Prod'")
+    assert 'Connected to Renamed Prod' in two.inner_text('#connection-status')
+    assert two.evaluate("fetch('/api/connections').then(r => r.json()).then(d => d.connections.map(c => c.name).sort())") == ['Alpha DB', 'Renamed Prod']
+    two.click('#switcher-handle')
+    assert two.locator('#switcher-panel .switch-name').all_inner_texts() == ['Alpha DB', 'Renamed Prod']
+    assert two.evaluate("fetch('/api/connections').then(r => r.json()).then(d => d.connections.find(c => c.name === 'Renamed Prod').environment)") == 'production'   # nothing else changed
+
+
+def test_renaming_another_connection_leaves_the_active_one_alone(two):
+    rename_from_panel(two, 'Alpha DB', 'Alpha Two')
+    two.wait_for_function("document.querySelectorAll('#switcher-panel .switch-name').length === 2 && [...document.querySelectorAll('#switcher-panel .switch-name')].some(n => n.textContent === 'Alpha Two')")
+    assert active_name(two) == 'Beta DB'
+
+
+def test_a_blank_name_is_refused_and_cancel_changes_nothing(two):
+    manual_dialogs(two)
+    two.click('#switcher-handle')
+    two.locator('#switcher-panel .switch-row:has-text("Alpha DB")').click(button='right')
+    two.click('.table-context-menu .context-menu-item:text-is("Rename")')
+    two.wait_for_selector('.app-dialog-input')
+    two.fill('.app-dialog-input', '   ')
+    two.click('.app-dialog [data-answer=ok]')
+    assert 'Give the connection a name' in two.inner_text('.app-dialog-error')
+    two.click('.app-dialog [data-answer=cancel]')
+    two.wait_for_selector('.app-dialog', state='detached')
+    assert two.evaluate("fetch('/api/connections').then(r => r.json()).then(d => d.connections.map(c => c.name).sort())") == ['Alpha DB', 'Beta DB']

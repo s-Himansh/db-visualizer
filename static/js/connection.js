@@ -607,6 +607,29 @@ class ConnectionManager {
         }
     }
 
+    async rename(id) {
+        const conn = this.connections.find(c => c.id === id);
+        if (!conn) return;
+        const name = await ui.prompt('New name for this connection.', { title: 'Rename connection', value: conn.name, confirmLabel: 'Rename', emptyMessage: 'Give the connection a name.' });
+        if (!name || name === conn.name) return;
+        try {
+            // the update merges what it is given into the saved connection, so nothing else (host, password, tunnel) is touched
+            const response = await fetch(`/api/connections/${encodeURIComponent(id)}`, {
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, environment: conn.environment || '' }) });
+            const result = await response.json();
+            if (!result.success) { ui.notify(result.error || 'Could not rename the connection.', 'error'); return; }
+        } catch (error) {
+            ui.notify(`Could not rename the connection: ${error.message}`, 'error');
+            return;
+        }
+        await this.loadConnections();
+        if (this.activeConnection?.id === id) {
+            this.activeConnection = this.connections.find(c => c.id === id);
+            this.updateConnectionStatus(`Connected to ${name}`);
+        }
+        this.updateConnectionBadges();
+    }
+
     switchToConnection(id) {
 
         // 1. Hide tabs for old connection before switching
