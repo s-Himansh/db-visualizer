@@ -67,6 +67,14 @@ class RelationsManager {
             const td = e.target.closest('td.fk, td.ref');
             if (td) td.style.cursor = (inArrowZone(td, e) || e.metaKey || e.ctrlKey) ? 'pointer' : '';
         });
+        grid.addEventListener('contextmenu', (e) => {
+            const tr = e.target.closest('tbody tr');
+            if (!tr) return;
+            e.preventDefault();
+            const row = {};
+            tr.querySelectorAll('td[data-column]:not(.new-cell)').forEach(td => { row[td.dataset.column] = td.dataset.originalValue; });
+            this.exploreMenu(e, tab, row);
+        });
         grid.addEventListener('click', (e) => {
             const td = e.target.closest('td.fk, td.ref');
             if (!td || !(inArrowZone(td, e) || e.metaKey || e.ctrlKey)) return;
@@ -81,6 +89,22 @@ class RelationsManager {
                 this.chooseReferrer(e, tab, inc.get(column), value);
             }
         }, true);
+    }
+
+    // Right-click a row to explore it. Cells without a value (NULL, empty) are left out of the row.
+    exploreMenu(event, tab, row) {
+        document.querySelectorAll('.table-context-menu').forEach(m => m.remove());
+        const menu = document.createElement('div');
+        menu.className = 'table-context-menu';
+        menu.style.left = Math.min(event.clientX, window.innerWidth - 240) + 'px';
+        menu.style.top = Math.min(event.clientY, window.innerHeight - 50) + 'px';
+        const item = document.createElement('div');
+        item.className = 'context-menu-item';
+        item.textContent = 'Explore this record';
+        item.addEventListener('click', () => { menu.remove(); window.app.explorer.open(tab, tab.state.tableName, row); });
+        menu.appendChild(item);
+        document.body.appendChild(menu);
+        setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 0);
     }
 
     follow(tab, table, column, value) {
