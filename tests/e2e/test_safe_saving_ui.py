@@ -233,6 +233,7 @@ def edit_json(pg, row, text):
     pg.locator(f'.tab-content.active tr[data-row-index="{row}"] .json-cell').click()
     pg.wait_for_selector('#json-editor-modal.active')
     pg.evaluate("v => document.querySelector('#json-editor-container .CodeMirror').CodeMirror.setValue(v)", text)
+    assert pg.inner_text('#json-save-btn') == 'Finalize'            # it keeps the change; the table's Save writes it
     pg.click('#json-save-btn')
 
 
@@ -241,7 +242,8 @@ def test_an_edited_json_cell_is_saved(connected):
     open_table(connected, 'customers')
     row = connected.evaluate("() => [...document.querySelectorAll('.tab-content.active tbody tr')].findIndex(tr => tr.querySelector('.json-cell'))")
     assert row >= 0
-    edit_json(connected, row, '{"tier": "silver", "tags": ["x"]}')   # the editor's own Save writes it: no second click
+    edit_json(connected, row, '{"tier": "silver", "tags": ["x"]}')
+    save(connected)
     toast_with(connected, 'Saved 1 change')
     stored = db(connected, 'select meta from customers where id = ?', row + 1)[0][0]
     assert json.loads(stored) == {'tier': 'silver', 'tags': ['x']}
@@ -253,7 +255,8 @@ def test_a_json_edit_and_a_plain_edit_are_saved_together(connected):
     open_table(connected, 'customers')
     row = connected.evaluate("() => [...document.querySelectorAll('.tab-content.active tbody tr')].findIndex(tr => tr.querySelector('.json-cell'))")
     edit(connected, row, 'name', 'Renamed')
-    edit_json(connected, row, '{"tier": "bronze"}')                  # saving the JSON saves the pending name edit with it
+    edit_json(connected, row, '{"tier": "bronze"}')
+    save(connected)
     toast_with(connected, 'Saved 1 change')
     name, meta = db(connected, 'select name, meta from customers where id = ?', row + 1)[0]
     assert name == 'Renamed' and json.loads(meta) == {'tier': 'bronze'}
@@ -271,3 +274,19 @@ def test_search_boxes_are_not_auto_capitalised(connected):
         .map(i => [i.id || i.className, i.getAttribute('autocapitalize'), i.getAttribute('autocorrect')])""")
     assert len(found) >= 3
     assert all(cap == 'off' and correct == 'off' for _, cap, correct in found), found
+
+
+def test_finalizing_a_json_edit_stages_it_and_the_table_save_writes_it(connected):
+    import json
+    open_table(connected, 'customers')
+    row = connected.evaluate("() => [...document.querySelectorAll('.tab-content.active tbody tr')].findIndex(tr => tr.querySelector('.json-cell'))")
+    stored = db(connected, 'select meta from customers where id = ?', row + 1)
+    edit(connected, row, 'name', 'Staged too')
+    edit_json(connected, row, '{"tier": "staged"}')
+
+    assert db(connected, 'select meta from customers where id = ?', row + 1) == stored      # finalizing alone writes nothing
+    assert connected.is_visible('.tab-content.active [data-action=save-changes]')
+    save(connected)
+    toast_with(connected, 'Saved 1 change')
+    name, meta = db(connected, 'select name, meta from customers where id = ?', row + 1)[0]
+    assert name == 'Staged too' and json.loads(meta) == {'tier': 'staged'}

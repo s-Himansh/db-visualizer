@@ -1698,7 +1698,7 @@ class TabManager {
                     </div>
                     <div id="json-editor-container" style="height: 400px; border: 1px solid var(--line-strong);"></div>
                     <div class="form-actions" style="margin-top: 16px;">
-                        <button class="btn btn-primary" id="json-save-btn"${readOnly ? ' style="display: none;"' : ''}>Save Changes</button>
+                        <button class="btn btn-primary" id="json-save-btn" title="Keep this change. Like any edit, it is written when you press Save changes on the table."${readOnly ? ' style="display: none;"' : ''}>Finalize</button>
                         <button class="btn" id="json-cancel-btn">${readOnly ? 'Close' : 'Cancel'}</button>
                     </div>
                 </div>
@@ -1780,8 +1780,6 @@ class TabManager {
                 if (activeTab && activeTab.type === 'table') this.toggleSaveButtons(activeTab, true);
 
                 modal.classList.remove('active');
-                // Saving here means saving: one click writes it (and any other edit already waiting in this table)
-                if (activeTab && activeTab.type === 'table') this.saveTableChanges(activeTab);
             } catch (e) {
                 ui.notify('Invalid JSON: ' + e.message);
             }
