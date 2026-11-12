@@ -960,3 +960,15 @@ body[data-env="production"] .status-bar::after { content: 'PRODUCTION'; margin-l
 
 /* the map's own header text is longer than the 38 characters other toolbars allow ("12 tables, 11 relationships (2 inferred)") */
 .map-container .table-toolbar .map-info { max-width: none; overflow: visible; text-overflow: clip; }
+
+/* ---------- record explorer ---------- */
+#explorer-body { margin-top: 10px; max-height: 60vh; overflow-y: auto; }
+.explore-heading { margin: 14px 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+.explore-group { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 8px; overflow: hidden; }
+.explore-group-head { display: flex; align-items: baseline; gap: 8px; padding: 8px 12px; }
+.explore-group-name { font-weight: 600; color: var(--text-strong); }
+.explore-group-via { flex: 1; font-family: var(--font-data); font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.explore-group-count { font-size: 11.5px; color: var(--muted); }
+.explore-row, .explore-all { display: block; width: 100%; padding: 7px 12px; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.explore-row:hover, .explore-row:focus-visible, .explore-all:hover, .explore-all:focus-visible { background: var(--accent-wash); }
+.explore-all { color: var(--accent); }

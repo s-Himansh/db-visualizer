@@ -30,6 +30,7 @@ class DatabaseVisualizer {
         this.csvImporter = new CsvImporter();
         this.relations = new RelationsManager();
         this.relationshipFinder = new RelationshipFinder();
+        this.explorer = new RecordExplorer();
         this.palette = new CommandPalette();
         this.insights = new ColumnInsights();
         this.assistant = new AIAssistant();

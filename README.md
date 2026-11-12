@@ -63,6 +63,8 @@ python3 -m venv .venv
 ### 🔗 Follow the data
 A value that points at another table (a foreign key) shows **↗**: click it to open exactly that row. A value that other tables point at shows **↘**: click it to see who refers to it. Hold ⌘/Ctrl and click anywhere in a cell to follow it.
 
+To see everything about one row, right-click it and choose **Explore this record**: the rows it points at and the rows that point at it, a few of each. Click one to step into it, or **Back** to return. It uses every link the app knows, including accepted ones.
+
 </td>
 <td width="50%" valign="top">
 
