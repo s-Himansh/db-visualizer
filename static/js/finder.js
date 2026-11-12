@@ -126,6 +126,13 @@ class RelationshipFinder {
             : s.orphans ? 'Some values point at nothing' : 'Only a few different values to go on';
         title.append(tag);
         main.append(title, this.el('div', 'map-suggest-evidence', this.describe(s)));
+        if (s.orphans) {
+            const show = this.el('button', 'btn btn-sm', 'Show the rows');
+            show.type = 'button';
+            show.dataset.act = 'orphans';
+            show.addEventListener('click', () => window.app.explorer.openOrphans(tab, s));
+            main.append(show);
+        }
         row.append(main);
 
         const actions = this.el('div', 'map-suggest-actions');

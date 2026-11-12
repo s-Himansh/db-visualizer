@@ -316,3 +316,16 @@ def test_the_sample_shop_shows_the_feature_including_a_correct_no(client, tmp_pa
     assert not any(table == 'affiliate_clicks' for table, _ in got)           # the name fits, the data does not: the app says no
     declared = {(r['table'], r['column']) for r in relations(client, cid, path)}
     assert ('orders', 'customer_id') in declared and not declared & set(got)  # the shop's own keys are real; the add-ons are not
+
+
+def test_orphan_rows_are_listed_with_their_count(client, tmp_path):
+    from sample_data import build_sample
+    path = str(build_sample(tmp_path / 'shop.db'))
+    cid = client.post('/api/connections', json={'name': 'sample', 'type': 'sqlite', 'database': path}).get_json()['id']
+    client.post('/api/connect', json={'id': cid})
+    q = f'/api/relations/orphans?connection_id={cid}&database={path}&table=coupon_redemptions&column=order_id&referenced_table=orders&referenced_column=id'
+    data = client.get(q).get_json()['data']
+    assert data['total_count'] >= 8 and len(data['rows']) == min(data['total_count'], 20)
+    ids = {i for (i,) in sqlite3.connect(path).execute('select id from orders')}
+    assert all(r['order_id'] not in ids for r in data['rows'])        # every row shown really points at nothing
+    assert client.get(q.replace('column=order_id', 'column=nope')).status_code == 400

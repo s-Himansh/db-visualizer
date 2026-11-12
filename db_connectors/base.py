@@ -429,6 +429,18 @@ class BaseConnector(ABC):
             f'LEFT JOIN {self.table_ref(parent, database)} par ON par.{p} = c.v')[0]
         return {'distinct': int(distinct), 'matched': int(matched)}
 
+    def orphan_rows(self, child: str, child_column: str, parent: str, parent_column: str,
+                    database: Optional[str] = None, limit: int = 20) -> Dict[str, Any]:
+        """The rows of child whose child_column holds a value that does not exist in parent.parent_column, and how many there are.
+        shortcut: one pass over the child table with no sample, so a very large unindexed table is slow; add a cap if that bites."""
+        self._prepare(database)
+        c, p = self.q(child_column), self.q(parent_column)
+        source = (f'{self.table_ref(child, database)} c LEFT JOIN {self.table_ref(parent, database)} par ON par.{p} = c.{c} '
+                  f'WHERE c.{c} IS NOT NULL AND par.{p} IS NULL')
+        total = int(self._fetch(f'SELECT COUNT(*) FROM {source}')[0][0])
+        shown = self.execute_query(self._capped('c.*', source, int(limit)))
+        return {'columns': shown['columns'], 'rows': shown['rows'], 'total_count': total}
+
     def import_session(self):
         """A context manager around a CSV import. The default does nothing; Oracle uses it to accept ISO dates."""
         return contextlib.nullcontext()

@@ -80,3 +80,23 @@ def test_rows_list_their_columns_in_the_tables_own_order(connected):
     connected.wait_for_selector('#explorer-body .explore-group')
     first = connected.locator('#explorer-body .explore-group').filter(has_text='orders').locator('.explore-row').first.inner_text()
     assert first.startswith('id 1 · customer_id 2')            # orders is (id, customer_id, total, status), not alphabetical
+
+
+def test_rows_that_point_at_nothing_can_be_listed_and_explored(page):
+    page.click('#welcome-sample')
+    page.wait_for_selector('#tables-content .tree-item', timeout=15000)
+    page.click('#open-map-btn')
+    page.wait_for_selector('.tab-content.active .map-container')
+    page.click('.tab-content.active [data-map=find]')
+    page.wait_for_selector('.tab-content.active .map-suggest-list')
+    clean = page.locator('.tab-content.active .map-suggest-item[data-relation="support_tickets.customer_id"] [data-act=orphans]')
+    assert clean.count() == 0                                                     # nothing to show when nothing is orphaned
+    page.click('.tab-content.active .map-suggest-item[data-relation="coupon_redemptions.order_id"] [data-act=orphans]')
+    page.wait_for_selector('#explorer-body .explore-row')
+    assert 'no match in orders' in page.inner_text('#explorer-body')
+    rows = page.locator('#explorer-body .explore-row')
+    assert rows.count() >= 8
+    rows.first.click()
+    page.wait_for_function("document.querySelector('#explorer-title').textContent.startsWith('coupon_redemptions:')")
+    page.wait_for_selector('#explorer-body .form-hint')
+    assert 'Nothing found in: orders.id' in page.inner_text('#explorer-body')     # the parent it points at is missing

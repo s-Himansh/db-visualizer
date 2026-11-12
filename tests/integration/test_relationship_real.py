@@ -94,6 +94,13 @@ def test_orphans_are_counted(real):
     assert s['distinct'] == 68 and s['matched'] == 48 and s['orphans'] == 20 and s['confidence'] == 'low'
 
 
+def test_orphan_rows_are_the_rows_that_point_at_nothing(real):
+    client, cid, conn, schema, kind = real
+    found = conn.orphan_rows('zreviews', 'zcustomer_id', 'zcustomers', 'id', schema, 5)
+    assert found['total_count'] == 20 and len(found['rows']) == 5       # 20 of the 100 reviews point at nobody
+    assert all(r['zcustomer_id'] >= 5000 for r in found['rows'])
+
+
 def test_text_in_a_column_named_like_a_number_reference_is_left_alone(real):
     client, cid, conn, schema, kind = real
     assert ('zlogs', 'zcustomer_id') not in suggestions(conn, schema)[0]
