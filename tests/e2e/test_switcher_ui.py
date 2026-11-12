@@ -26,6 +26,10 @@ def two(page):
     return page
 
 
+def toast_with(pg, text):
+    pg.wait_for_function("t => document.querySelector('#toast-stack') && document.querySelector('#toast-stack').innerText.includes(t)", arg=text)
+
+
 def active_name(pg):
     return pg.inner_text('.connection-badge.active .connection-name')
 
@@ -110,6 +114,7 @@ def rename_from_panel(pg, row, new):
 
 def test_renaming_the_active_connection_updates_everywhere_and_is_remembered(two):
     rename_from_panel(two, 'Beta DB', 'Renamed Prod')
+    toast_with(two, 'Renamed "Beta DB" to "Renamed Prod".')                         # says what changed to what
     two.wait_for_function("document.querySelector('.connection-badge.active .connection-name').textContent === 'Renamed Prod'")
     assert 'Connected to Renamed Prod' in two.inner_text('#connection-status')
     assert two.evaluate("fetch('/api/connections').then(r => r.json()).then(d => d.connections.map(c => c.name).sort())") == ['Alpha DB', 'Renamed Prod']
@@ -120,6 +125,7 @@ def test_renaming_the_active_connection_updates_everywhere_and_is_remembered(two
 
 def test_renaming_another_connection_leaves_the_active_one_alone(two):
     rename_from_panel(two, 'Alpha DB', 'Alpha Two')
+    toast_with(two, 'Renamed "Alpha DB" to "Alpha Two".')
     two.wait_for_function("document.querySelectorAll('#switcher-panel .switch-name').length === 2 && [...document.querySelectorAll('#switcher-panel .switch-name')].some(n => n.textContent === 'Alpha Two')")
     assert active_name(two) == 'Beta DB'
 
@@ -136,3 +142,9 @@ def test_a_blank_name_is_refused_and_cancel_changes_nothing(two):
     two.click('.app-dialog [data-answer=cancel]')
     two.wait_for_selector('.app-dialog', state='detached')
     assert two.evaluate("fetch('/api/connections').then(r => r.json()).then(d => d.connections.map(c => c.name).sort())") == ['Alpha DB', 'Beta DB']
+
+
+def test_keeping_the_same_name_does_nothing(two):
+    rename_from_panel(two, 'Alpha DB', 'Alpha DB')
+    two.wait_for_selector('.app-dialog', state='detached')
+    assert 'Renamed' not in two.evaluate("document.querySelector('#toast-stack') ? document.querySelector('#toast-stack').innerText : ''")

@@ -610,8 +610,9 @@ class ConnectionManager {
     async rename(id) {
         const conn = this.connections.find(c => c.id === id);
         if (!conn) return;
-        const name = await ui.prompt('New name for this connection.', { title: 'Rename connection', value: conn.name, confirmLabel: 'Rename', emptyMessage: 'Give the connection a name.' });
-        if (!name || name === conn.name) return;
+        const oldName = conn.name;
+        const name = await ui.prompt('New name for this connection.', { title: 'Rename connection', value: oldName, confirmLabel: 'Rename', emptyMessage: 'Give the connection a name.' });
+        if (!name || name === oldName) return;
         try {
             // the update merges what it is given into the saved connection, so nothing else (host, password, tunnel) is touched
             const response = await fetch(`/api/connections/${encodeURIComponent(id)}`, {
@@ -628,6 +629,7 @@ class ConnectionManager {
             this.updateConnectionStatus(`Connected to ${name}`);
         }
         this.updateConnectionBadges();
+        ui.notify(`Renamed "${oldName}" to "${name}".`, 'success');
     }
 
     switchToConnection(id) {
