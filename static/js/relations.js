@@ -72,7 +72,7 @@ class RelationsManager {
             if (!tr) return;
             e.preventDefault();
             const row = {};
-            tr.querySelectorAll('td[data-column]:not(.new-cell)').forEach(td => { row[td.dataset.column] = td.dataset.originalValue; });
+            tr.querySelectorAll('td[data-column]:not(.new-cell)').forEach(td => { if (td.dataset.originalValue !== undefined) row[td.dataset.column] = td.dataset.originalValue; });
             this.exploreMenu(e, tab, row);
         });
         grid.addEventListener('click', (e) => {

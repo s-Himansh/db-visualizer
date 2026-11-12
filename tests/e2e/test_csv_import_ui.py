@@ -98,7 +98,7 @@ def test_import_adds_the_rows_and_refreshes_the_table(connected, tmp_path):
     connected.wait_for_selector('#import-modal.active', state='hidden')
     assert query(connected, "select name, email, country from customers where name like '% Import' order by name") == [
         ('Alice Import', 'alice@example.com', 'FR'), ('Bob Import', 'bob@example.com', 'ES'), ('Cy Import', None, 'IT')]   # empty email -> NULL
-    assert '33 total rows' in connected.inner_text('.tab-content.active .table-toolbar')       # the grid was reloaded
+    connected.wait_for_function("document.querySelector('.tab-content.active .table-toolbar').innerText.includes('33 total rows')")   # the grid reloads a moment after the toast
 
 
 def test_empty_values_can_stay_empty_text(connected, tmp_path):
