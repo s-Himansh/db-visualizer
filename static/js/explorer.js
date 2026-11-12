@@ -73,7 +73,9 @@ class RecordExplorer {
         try {
             const body = await (await fetch(`/api/data?${query}`)).json();
             if (!body.success) throw new Error(body.error || 'Could not read the rows');
-            return { ...link, rows: body.data.rows, total: body.data.total_count };
+            // The server's row objects come back with their keys sorted; the column list keeps the table's own order.
+            const rows = body.data.rows.map(r => Object.fromEntries(body.data.columns.map(c => [c, r[c]])));
+            return { ...link, rows, total: body.data.total_count };
         } catch (err) {
             return { ...link, rows: [], total: 0, error: err.message };
         }
