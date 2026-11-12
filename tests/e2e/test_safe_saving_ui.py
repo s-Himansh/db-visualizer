@@ -190,3 +190,37 @@ def test_undo_restores_a_value_that_was_null(connected):
     connected.click('.tab-content.active [data-action=undo-edit]')
     assert cell_text(connected, row, 'notes') == 'NULL'
     assert connected.locator('.tab-content.active td.modified').count() == 0
+
+
+# ---- JSON cells -------------------------------------------------------------------------------------------------------
+
+def edit_json(pg, row, text):
+    pg.locator(f'.tab-content.active tr[data-row-index="{row}"] .json-cell').click()
+    pg.wait_for_selector('#json-editor-modal.active')
+    pg.evaluate("v => document.querySelector('#json-editor-container .CodeMirror').CodeMirror.setValue(v)", text)
+    pg.click('#json-save-btn')
+
+
+def test_an_edited_json_cell_is_saved(connected):
+    import json
+    open_table(connected, 'customers')
+    row = connected.evaluate("() => [...document.querySelectorAll('.tab-content.active tbody tr')].findIndex(tr => tr.querySelector('.json-cell'))")
+    assert row >= 0
+    edit_json(connected, row, '{"tier": "silver", "tags": ["x"]}')
+    save(connected)
+    toast_with(connected, 'Saved 1 change')
+    stored = db(connected, 'select meta from customers where id = ?', row + 1)[0][0]
+    assert json.loads(stored) == {'tier': 'silver', 'tags': ['x']}
+    assert db(connected, 'select count(*) from customers where meta like ?', '%silver%') == [(1,)]
+
+
+def test_a_json_edit_and_a_plain_edit_are_saved_together(connected):
+    import json
+    open_table(connected, 'customers')
+    row = connected.evaluate("() => [...document.querySelectorAll('.tab-content.active tbody tr')].findIndex(tr => tr.querySelector('.json-cell'))")
+    edit(connected, row, 'name', 'Renamed')
+    edit_json(connected, row, '{"tier": "bronze"}')
+    save(connected)
+    toast_with(connected, 'Saved 1 change')
+    name, meta = db(connected, 'select name, meta from customers where id = ?', row + 1)[0]
+    assert name == 'Renamed' and json.loads(meta) == {'tier': 'bronze'}

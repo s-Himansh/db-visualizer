@@ -1562,7 +1562,7 @@ class TabManager {
                         ? this.escapeHtml(compactJson.substring(0, 50)) + '...'
                         : this.escapeHtml(compactJson);
 
-                    html += `<td>
+                    html += `<td data-column="${this.escapeHtml(col)}">
                         <span class="json-cell" data-json-id="${jsonId}">
                             <span class="json-preview">${preview}</span>
                             <span class="json-icon" title="View full value">{ }</span>
@@ -1594,7 +1594,7 @@ class TabManager {
                             ? this.escapeHtml(compactJson.substring(0, 50)) + '...'
                             : this.escapeHtml(compactJson);
 
-                        html += `<td>
+                        html += `<td data-column="${this.escapeHtml(col)}">
                             <span class="json-cell" data-json-id="${jsonId}">
                                 <span class="json-preview">${preview}</span>
                                 <span class="json-icon" title="View full value">{ }</span>
@@ -1698,7 +1698,7 @@ class TabManager {
                     const jsonId = e.currentTarget.getAttribute('data-json-id');
                     const jsonData = this.jsonDataStore.get(jsonId);
                     if (jsonData) {
-                        this.showEditableJsonModal(jsonData, jsonId, cell);
+                        this.showEditableJsonModal(jsonData, jsonId, cell.closest('td'));
                     }
                 });
             }
@@ -2353,7 +2353,7 @@ class TabManager {
         // Everything is saved as ONE request: it all happens or none of it does (where the database can roll back)
         const cellValue = (cell) => {
             // JSON / long-text cells keep their full value in jsonDataStore
-            const jsonIcon = cell.querySelector('.json-view-icon');
+            const jsonIcon = cell.querySelector('.json-view-icon, .json-cell');
             if (jsonIcon) {
                 const jsonId = jsonIcon.getAttribute('data-json-id');
                 if (jsonId && this.jsonDataStore.has(jsonId)) {
@@ -2399,7 +2399,7 @@ class TabManager {
                 if (!col) return;
                 data[col] = cellValue(cell);
                 // what the cell held when you loaded it: the save refuses if the database holds something else now
-                if (!cell.querySelector('.json-view-icon')) expected[col] = cell.getAttribute('data-original-value');
+                if (!cell.querySelector('.json-view-icon, .json-cell')) expected[col] = cell.getAttribute('data-original-value');
             });
             operations.push({ op: 'update', conditions, data, expected });
         }
