@@ -68,8 +68,8 @@ class SavedQueries {
             }
             if (!result.success) { ui.notify(result.error || 'Could not save the query.', 'error'); return; }
             tab.savedName = result.query.name;
+            await this.load();   // list it before saying so: the palette and the panel read this list
             ui.notify(`Saved the query "${result.query.name}".`, 'success');
-            await this.load();
         } catch (error) {
             console.error('Error saving query:', error);
             ui.notify(`Could not save the query: ${error.message}`, 'error');
