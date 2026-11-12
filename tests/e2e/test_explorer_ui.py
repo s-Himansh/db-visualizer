@@ -92,7 +92,7 @@ def test_rows_that_point_at_nothing_can_be_listed_and_explored(page):
     assert clean.count() == 0                                                     # nothing to show when nothing is orphaned
     page.click('.tab-content.active .map-suggest-item[data-relation="coupon_redemptions.order_id"] [data-act=orphans]')
     page.wait_for_selector('#explorer-body .explore-row')
-    assert 'no match in orders' in page.inner_text('#explorer-body')
+    assert 'point at nothing: order_id has no match in orders' in page.inner_text('#explorer-body')
     rows = page.locator('#explorer-body .explore-row')
     assert rows.count() >= 8
     rows.first.click()

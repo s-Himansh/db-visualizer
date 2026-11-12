@@ -52,8 +52,9 @@ class RecordExplorer {
             const body = await (await fetch(`/api/relations/orphans?${query}`)).json();
             if (!body.success) throw new Error(body.error || 'Could not read the rows');
             const rows = RecordExplorer.inColumnOrder(body.data);
-            const parts = [this.note(`${body.data.total_count.toLocaleString()} row${body.data.total_count === 1 ? ' has' : 's have'} a ${s.column} with no match in ${s.referenced_table}.` +
-                (body.data.total_count > rows.length ? ` The first ${rows.length} are shown.` : ''))];
+            const count = body.data.total_count;
+            const parts = [this.note(`${count.toLocaleString()} row${count === 1 ? '' : 's'} in ${s.table} ${count === 1 ? 'points' : 'point'} at nothing: ${s.column} has no match in ${s.referenced_table}.` +
+                (count > rows.length ? ` The first ${rows.length} are shown.` : ''))];
             for (const row of rows) {
                 const item = this.el('button', 'explore-row', this.summary(row, 5));
                 item.type = 'button';
