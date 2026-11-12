@@ -233,6 +233,7 @@ def edit_json(pg, row, text):
     pg.locator(f'.tab-content.active tr[data-row-index="{row}"] .json-cell').click()
     pg.wait_for_selector('#json-editor-modal.active')
     pg.evaluate("v => document.querySelector('#json-editor-container .CodeMirror').CodeMirror.setValue(v)", text)
+    assert pg.inner_text('#json-save-btn') == 'Finalize'            # it keeps the change; the table's Save writes it
     pg.click('#json-save-btn')
 
 
@@ -259,3 +260,33 @@ def test_a_json_edit_and_a_plain_edit_are_saved_together(connected):
     toast_with(connected, 'Saved 1 change')
     name, meta = db(connected, 'select name, meta from customers where id = ?', row + 1)[0]
     assert name == 'Renamed' and json.loads(meta) == {'tier': 'bronze'}
+
+
+# ---- search boxes ---------------------------------------------------------------------------------------------------------
+
+def test_search_boxes_are_not_auto_capitalised(connected):
+    """The desktop window capitalises the first letter of a text field unless told not to: a search for 'ava' became 'Ava'."""
+    open_table(connected, 'customers')
+    connected.click('#new-query-tab-btn')
+    connected.keyboard.press('Meta+k')
+    connected.wait_for_selector('.palette-input')
+    found = connected.evaluate("""() => [...document.querySelectorAll('input.table-search-input, input.palette-input, #saved-queries-filter')]
+        .map(i => [i.id || i.className, i.getAttribute('autocapitalize'), i.getAttribute('autocorrect')])""")
+    assert len(found) >= 3
+    assert all(cap == 'off' and correct == 'off' for _, cap, correct in found), found
+
+
+def test_finalizing_a_json_edit_stages_it_and_the_table_save_writes_it(connected):
+    import json
+    open_table(connected, 'customers')
+    row = connected.evaluate("() => [...document.querySelectorAll('.tab-content.active tbody tr')].findIndex(tr => tr.querySelector('.json-cell'))")
+    stored = db(connected, 'select meta from customers where id = ?', row + 1)
+    edit(connected, row, 'name', 'Staged too')
+    edit_json(connected, row, '{"tier": "staged"}')
+
+    assert db(connected, 'select meta from customers where id = ?', row + 1) == stored      # finalizing alone writes nothing
+    assert connected.is_visible('.tab-content.active [data-action=save-changes]')
+    save(connected)
+    toast_with(connected, 'Saved 1 change')
+    name, meta = db(connected, 'select name, meta from customers where id = ?', row + 1)[0]
+    assert name == 'Staged too' and json.loads(meta) == {'tier': 'staged'}
