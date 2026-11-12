@@ -344,6 +344,7 @@ class TabManager {
                         <button class="btn btn-sm btn-success" data-tab-id="${tab.id}" data-action="add-row">Add row</button>
                         <button class="btn btn-sm btn-danger" data-tab-id="${tab.id}" data-action="delete-row">Delete rows</button>
                         <button class="btn btn-sm btn-primary" data-tab-id="${tab.id}" data-action="save-changes" style="display: none;">Save changes</button>
+                        <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="undo-edit" style="display: none;" title="Undo your last edit (Cmd/Ctrl+Z)">Undo</button>
                         <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="discard-changes" style="display: none;">Discard</button>
                         <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="import-csv" title="Add rows to this table from a CSV file">Import CSV</button>
                         <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="export-table-csv">Export CSV</button>
@@ -1520,6 +1521,7 @@ class TabManager {
         tab.originalTableData = JSON.parse(JSON.stringify(tableData.rows));
         tab.tableColumns = tableData.columns;
         tab.modifiedRows = new Set();
+        tab.editHistory = [];   // [{cell, before}] for Undo: one entry per edit, newest last
 
         const conn = window.app.connectionManager.connections.find(c => c.id === tab.connectionId);
         const insights = !!conn && ColumnInsights.supported(conn.type);   // column insights read through SQL
@@ -1923,6 +1925,9 @@ class TabManager {
                 case 'discard-changes':
                     this.discardTableChanges(tab);
                     break;
+                case 'undo-edit':
+                    this.undoEdit(tab);
+                    break;
                 case 'search-table':
                     this.searchTable(tab);
                     break;
@@ -2123,6 +2128,7 @@ class TabManager {
         editableCells.forEach(cell => {
             // Clear "NULL" text when focusing on empty cell
             cell.addEventListener('focus', (e) => {
+                e.target.dataset.editBefore = e.target.classList.contains('null') ? '' : e.target.textContent.trim();
                 if (e.target.textContent === 'NULL') {
                     e.target.textContent = '';
                     e.target.classList.remove('null');
@@ -2143,6 +2149,12 @@ class TabManager {
                 }
 
                 const originalValue = e.target.getAttribute('data-original-value');
+
+                const before = e.target.dataset.editBefore;
+                if (before !== undefined && newValue !== before && !e.target.classList.contains('new-cell')) {
+                    (tab.editHistory = tab.editHistory || []).push({ cell: e.target, before });
+                    this.toggleSaveButtons(tab, true);   // Undo shows, even when this edit put the cell back to its saved value
+                }
 
                 if (newValue !== originalValue) {
                     // Mark cell as modified
@@ -2178,8 +2190,28 @@ class TabManager {
         const saveBtn = document.querySelector(`[data-tab-id="${tab.id}"][data-action="save-changes"]`);
         const discardBtn = document.querySelector(`[data-tab-id="${tab.id}"][data-action="discard-changes"]`);
 
+        const undoBtn = document.querySelector(`[data-tab-id="${tab.id}"][data-action="undo-edit"]`);
+
+        if (!show) tab.editHistory = [];
         if (saveBtn) saveBtn.style.display = show ? 'inline-block' : 'none';
         if (discardBtn) discardBtn.style.display = show ? 'inline-block' : 'none';
+        if (undoBtn) undoBtn.style.display = show && tab.editHistory && tab.editHistory.length ? 'inline-block' : 'none';
+    }
+
+    /**
+     * Undo the last cell edit that has not been saved. Edits to new rows and JSON/long-text cells are not tracked.
+     * @param {object} tab - Tab object
+     */
+    undoEdit(tab) {
+        let step;
+        while ((step = (tab.editHistory || []).pop()) && !step.cell.isConnected);   // skip cells the table has since redrawn
+        if (!step) return;
+        const { cell, before } = step;
+        cell.textContent = before === '' ? 'NULL' : before;
+        cell.classList.toggle('null', before === '');
+        cell.classList.toggle('modified', before !== cell.getAttribute('data-original-value'));
+        const grid = cell.closest('.data-table');
+        this.toggleSaveButtons(tab, !!grid.querySelector('td.modified, tr.new-row'));
     }
 
     /**
@@ -3094,6 +3126,18 @@ class TabManager {
                         saveBtn.click();
                     }
                 }
+            }
+
+            // Cmd/Ctrl + Z - Undo the last unsaved cell edit (while typing in a field, the browser undoes the typing)
+            else if ((e.metaKey || e.ctrlKey) && !e.shiftKey && e.key === 'z') {
+                const tab = this.tabs.get(this.activeTabId);
+                if (!tab || tab.type !== 'table' || !(tab.editHistory || []).length) return;
+                const focused = document.activeElement;
+                const typing = focused && (focused.matches('input, textarea') ||
+                    (focused.isContentEditable && focused.dataset.editBefore !== undefined && focused.textContent.trim() !== focused.dataset.editBefore));
+                if (typing) return;
+                e.preventDefault();
+                this.undoEdit(tab);
             }
 
             // Cmd/Ctrl + W - Close current tab

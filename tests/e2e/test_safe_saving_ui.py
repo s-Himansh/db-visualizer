@@ -155,3 +155,38 @@ def test_editing_a_table_with_no_primary_key_and_a_null_really_saves(page):
     save(page)
     toast_with(page, 'Saved 1 change')
     assert db(page, 'select a, b from loose order by rowid') == [('ONE', None), ('two', 'x')]
+
+
+# ---- undoing an edit before it is saved --------------------------------------------------------------------------------
+
+def cell_text(pg, row, column):
+    return pg.locator(f'.tab-content.active tr[data-row-index="{row}"] td[data-column={column}]').inner_text()
+
+
+def test_undo_takes_back_one_edit_at_a_time_and_saves_nothing(connected):
+    open_table(connected, 'customers')
+    before = (cell_text(connected, 0, 'name'), cell_text(connected, 1, 'name'))
+    stored = db(connected, 'select id, name from customers order by id')
+    edit(connected, 0, 'name', 'First edit')
+    edit(connected, 1, 'name', 'Second edit')
+    assert connected.locator('.tab-content.active td.modified').count() == 2
+    connected.click('.tab-content.active [data-action=undo-edit]')
+    assert cell_text(connected, 1, 'name') == before[1]                         # the last edit is gone
+    assert cell_text(connected, 0, 'name') == 'First edit'                      # the one before it is not
+    assert connected.locator('.tab-content.active td.modified').count() == 1
+    connected.keyboard.press('ControlOrMeta+z')                                 # the shortcut does the same
+    assert cell_text(connected, 0, 'name') == before[0]
+    assert connected.locator('.tab-content.active td.modified').count() == 0
+    for action in ('save-changes', 'discard-changes', 'undo-edit'):             # nothing is pending, so nothing to click
+        assert connected.is_hidden(f'.tab-content.active [data-action={action}]')
+    assert db(connected, 'select id, name from customers order by id') == stored   # nothing was ever saved
+
+
+def test_undo_restores_a_value_that_was_null(connected):
+    open_table(connected, 'customers')
+    row = connected.evaluate("() => [...document.querySelectorAll('.tab-content.active tbody tr')].findIndex(tr => tr.querySelector('td[data-column=notes]').classList.contains('null'))")
+    assert row >= 0
+    edit(connected, row, 'notes', 'something')
+    connected.click('.tab-content.active [data-action=undo-edit]')
+    assert cell_text(connected, row, 'notes') == 'NULL'
+    assert connected.locator('.tab-content.active td.modified').count() == 0
