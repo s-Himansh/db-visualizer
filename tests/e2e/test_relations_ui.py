@@ -349,3 +349,23 @@ def test_all_columns_shows_every_column_and_primary_keys(map_open):
     assert map_open.locator('.tab-content.active .map-edge').count() == 3          # the arrows still land on the right rows
     map_open.uncheck('.tab-content.active [data-map=all-columns]')
     map_open.wait_for_function("n => document.querySelectorAll('.tab-content.active .map-node[data-table=customers] .map-col').length === n", arg=keys_only)
+
+
+# ---- search every table ---------------------------------------------------------------------------------------
+
+def test_search_every_table_lists_where_a_value_lives_and_opens_it_filtered(connected):
+    connected.keyboard.press('ControlOrMeta+Shift+F')
+    connected.fill('.palette-input', 'Liam')
+    connected.keyboard.press('Enter')
+    connected.wait_for_selector('.palette-item:has(.palette-label:text-is("customers"))')
+    assert 'name: Liam' in connected.inner_text('.palette-item:has(.palette-label:text-is("customers"))')
+    connected.click('.palette-item:has(.palette-label:text-is("customers"))')
+    connected.wait_for_function("document.querySelector('.tab-content.active .results-info') && document.querySelector('.tab-content.active .results-info').innerText.includes('filtered by \"Liam\"')")
+    assert connected.locator('.palette-backdrop').count() == 0
+
+
+def test_search_says_when_nothing_matches(connected):
+    connected.keyboard.press('ControlOrMeta+Shift+F')
+    connected.fill('.palette-input', 'zzzzqq')
+    connected.keyboard.press('Enter')
+    connected.wait_for_selector('.palette-empty:has-text("Nothing found")')
