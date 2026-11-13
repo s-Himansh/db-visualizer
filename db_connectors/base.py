@@ -297,6 +297,7 @@ class BaseConnector(ABC):
     # ---- safe writes ---------------------------------------------------------------------------------------
 
     last_rowcount: Optional[int] = None   # rows the most recent insert/update/delete touched
+    last_conflict: bool = False           # the most recent guarded update found the row changed under it
     _batch = False
 
     def _ph(self, index: int) -> str:
@@ -337,12 +338,15 @@ class BaseConnector(ABC):
     def _find_conflicts(self, table, operations, database) -> List[dict]:
         """Rows whose edited cells no longer hold what the user saw: someone else changed them (or deleted the row)."""
         conflicts = []
+        self._snapshots = {}
         for i, op in enumerate(operations):
             expected = op.get('expected')
             if op.get('op') != 'update' or not expected or not op.get('conditions'):
                 continue
             self._lock_rows(table, op['conditions'], database)
             rows = self._current_rows(table, op['conditions'], database)
+            if rows:
+                self._snapshots[i] = rows[0]
             if not rows:
                 conflicts += [{'index': i, 'column': c, 'expected': e, 'actual': None} for c, e in expected.items()][:1]
                 continue
@@ -352,14 +356,19 @@ class BaseConnector(ABC):
                     conflicts.append({'index': i, 'column': column, 'expected': was, 'actual': now})
         return conflicts
 
-    def _apply_op(self, table, op, database):
+    def _apply_op(self, table, op, database, index=None):
         kind = op.get('op')
         self.last_rowcount = None
+        self.last_conflict = False
         if kind == 'insert':
             return self.insert_row(table, op.get('data') or {}, database)
         if kind in ('update', 'delete') and not op.get('conditions'):
             return False, 'Refusing to change every row in the table: no row was identified.'
         if kind == 'update':
+            snapshot = getattr(self, '_snapshots', {}).get(index) if not self.SUPPORTS_TRANSACTIONS and op.get('expected') else None
+            if snapshot is not None:       # no row locks here: the write itself must say "only if it is still what the user saw"
+                guard = {c: snapshot.raw.get(c) if hasattr(snapshot, 'raw') else snapshot.get(c) for c in op['expected']}
+                return self.update_row(table, op['conditions'], op.get('data') or {}, database, only_if=guard)
             return self.update_row(table, op['conditions'], op.get('data') or {}, database)
         if kind == 'delete':
             ok, msg = self.delete_row(table, op['conditions'], database)
@@ -389,7 +398,12 @@ class BaseConnector(ABC):
                         'error': 'Some rows were changed by someone else since you loaded them. Nothing was saved.'}
             results = []
             for i, op in enumerate(operations):
-                ok, msg = self._apply_op(table, op, database)
+                ok, msg = self._apply_op(table, op, database, i)
+                if not ok and self.last_conflict:     # someone changed the row between the check and the write
+                    again = self._find_conflicts(table, [op], database)
+                    conflicts = [{**c, 'index': i} for c in again] or [{'index': i, 'column': next(iter(op['expected'])), 'expected': None, 'actual': None}]
+                    return {'success': False, 'rolled_back': False, 'applied': i, 'conflicts': conflicts,
+                            'error': 'A row was changed by someone else while saving.' + (f' {i} earlier change(s) were saved.' if i else ' Nothing was saved.')}
                 if not ok:
                     return {'success': False, 'failed_at': i, 'error': msg, 'rolled_back': False, 'applied': i, 'results': results}
                 results.append(msg)

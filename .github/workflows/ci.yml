@@ -89,6 +89,27 @@ jobs:
       # Two, not more: browsers compete for CPU on a 4-core runner, and starved tests are what made them flaky.
       - run: python -m pytest tests/e2e -n 2 -q $(for f in $DOCKER_E2E; do printf -- '--ignore=%s ' "$f"; done)
 
+  windows:
+    name: Windows (unit and browser tests)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: |
+          grep -v '^pywebview' requirements.txt > ci-requirements.txt
+          pip install -r ci-requirements.txt pytest playwright pytest-xdist
+      - run: python -m pytest tests --ignore=tests/e2e --ignore=tests/integration -q
+      - run: playwright install chromium
+      # the browser tests that need no Docker database; a different folder layout, path separators and file locking
+      # than Linux and macOS are exactly what this job is for
+      - run: python -m pytest tests/e2e -n 2 -q $(for f in $DOCKER_E2E; do printf -- '--ignore=%s ' "$f"; done)
+
   macos-build:
     name: Build the macOS app (unsigned)
     runs-on: macos-latest
