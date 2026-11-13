@@ -726,6 +726,12 @@ class ConnectionManager {
         return conn.environment ? `<span class="env-tag env-${this.esc(conn.environment)}">${this.esc(conn.environment)}</span>` : '';
     }
 
+    // SQL databases can export INSERT statements and be searched table by table; the others cannot
+    isSql(connectionId) {
+        const conn = this.connections.find(c => c.id === connectionId);
+        return !!conn && ['sqlite', 'mysql', 'postgresql', 'sqlserver', 'oracle'].includes(conn.type);
+    }
+
     isProduction(connectionId) {
         const conn = this.connections.find(c => c.id === connectionId);
         return !!conn && conn.environment === 'production';

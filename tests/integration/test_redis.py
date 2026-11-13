@@ -1,4 +1,6 @@
 """Redis has keys, not tables: a "table" is a key pattern (`user:*`) and a row is one key."""
+import json
+
 import pytest
 
 from conftest import HOST, reachable
@@ -69,6 +71,7 @@ def test_search_matches_key_text(r):
 def test_shows_value_type_and_ttl(r):
     row = page(r, 'session:*')['rows'][0]
     assert row['type'] == 'hash' and '10.0.0.1' in row['value']
+    assert json.loads(row['value']) == {'user': '7', 'ip': '10.0.0.1'}      # real JSON, so an export can be read back
     r.connection.set('ttl:one', 'x', ex=100)
     assert 0 < page(r, 'ttl:*')['rows'][0]['ttl'] <= 100
 

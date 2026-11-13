@@ -135,6 +135,15 @@ class OracleConnector(BaseConnector):
             logger.error(f"Error getting schemas: {e}")
             return []
 
+    def current_schema(self) -> str:
+        """The schema this login works in. The connection's `database` is the service name, which owns no tables."""
+        cursor = self.connection.cursor()
+        try:
+            cursor.execute("SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') FROM DUAL")
+            return cursor.fetchone()[0]
+        finally:
+            cursor.close()
+
     def get_tables(self, database: Optional[str] = None) -> List[Dict[str, Any]]:
         """Get all tables and views in the current schema or specified schema."""
         try:
