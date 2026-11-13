@@ -15,6 +15,7 @@ from test_connectors import BACKENDS, Backend, ensure_cassandra_keyspace, new_co
 
 pytestmark = pytest.mark.integration
 ALL = BACKENDS + [Backend('redis', RedisConnector, 16379, {}, db='1')]
+TABLE = 'qa_scratch'          # not 'people': other tests, and the SSH browser tests, rely on that table's contents
 
 
 def drop(b, wrapper, admin):
@@ -43,7 +44,7 @@ def drop(b, wrapper, admin):
 def read(b, wrapper):
     if b.id == 'redis':
         return wrapper.get_table_data('*', b.db, limit=1)
-    return wrapper.get_table_data('people', b.db, limit=1)
+    return wrapper.get_table_data(TABLE, b.db, limit=1)
 
 
 @pytest.fixture(params=ALL, ids=lambda b: b.id)
@@ -56,16 +57,16 @@ def live(request):
         b.db = b.params['database']
     ensure_cassandra_keyspace(b)
     conn = new_connector(b)
-    for stmt in b.ddl:
+    for stmt in [d.replace('people', TABLE) for d in b.ddl]:
         assert not conn.execute_query(stmt).get('error'), stmt
     if b.id == 'mongodb':
-        conn.connection[b.db]['people'].drop()
+        conn.connection[b.db][TABLE].drop()
     if b.id == 'redis':
         conn.connection.flushdb()
         conn.connection.set('qa:1', 'x')
     else:
         for i in range(1, 4):
-            assert conn.insert_row('people', {'id': i, 'name': f'n{i}', 'country': 'IN', 'score': 1}, b.db)[0]
+            assert conn.insert_row(TABLE, {'id': i, 'name': f'n{i}', 'country': 'IN', 'score': 1}, b.db)[0]
     wrapper = db.SerializedConnector(conn)
     admin = new_connector(b) if b.id in ('postgresql', 'mysql', 'sqlserver', 'redis') else None
     yield b, wrapper, admin
@@ -123,7 +124,7 @@ def test_the_schema_is_not_lost_either(live):
     b, wrapper, admin = live
     if b.id == 'redis':
         pytest.skip('a Redis schema is fixed')
-    assert wrapper.get_schema('people', b.db)['columns']
+    assert wrapper.get_schema(TABLE, b.db)['columns']
     drop(b, wrapper, admin)
     time.sleep(0.5)
-    assert wrapper.get_schema('people', b.db)['columns'], f'{b.id}: the schema came back empty after a drop'
+    assert wrapper.get_schema(TABLE, b.db)['columns'], f'{b.id}: the schema came back empty after a drop'

@@ -516,3 +516,10 @@ def test_only_huge_whole_number_text_is_turned_back_into_a_number():
                             'edge': '9007199254740991', 'zeros': '0000000000000042', 'none': None, 'num': 5})
     assert got == {'id': 1234567890123456789, 'neg': -9007199254740993, 'small': '12', 'text': 'abc',
                    'edge': '9007199254740991', 'zeros': '0000000000000042', 'none': None, 'num': 5}
+
+
+def test_connecting_records_when_a_connection_was_last_opened(client, conn_id):
+    saved = {c['id']: c for c in client.get('/api/connections').get_json()['connections']}
+    assert saved[conn_id]['last_used'] > 0
+    assert client.put(f'/api/connections/{conn_id}', json={'name': 'renamed', 'type': 'sqlite', 'database': saved[conn_id]['database'], 'environment': ''}).status_code == 200
+    assert client.get('/api/connections').get_json()['connections'][0]['last_used'] == saved[conn_id]['last_used']   # an edit keeps it

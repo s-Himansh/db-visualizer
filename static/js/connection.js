@@ -12,6 +12,10 @@ class ConnectionManager {
 
         // Event listeners
         document.getElementById('manage-connections-btn').addEventListener('click', () => this.showConnectionsManager());
+        document.addEventListener('keydown', (e) => {
+            const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
+            if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey && this.focusConnectionSearch()) e.preventDefault();
+        });
         document.getElementById('new-connection-btn-manager').addEventListener('click', () => this.showConnectionModal());
         document.getElementById('connections-manager-close').addEventListener('click', () => this.hideConnectionsManager());
         document.getElementById('connection-modal-close').addEventListener('click', () => this.hideConnectionModal());
@@ -72,11 +76,92 @@ class ConnectionManager {
     }
 
     renderConnections() {
-        const container = document.getElementById('connections-list');
-        container.innerHTML = '';
         document.dispatchEvent(new CustomEvent('connections-changed'));
+        this.renderGrid(document.getElementById('connections-list'), 'manager');
+    }
 
+    // ---- the connection grid: every saved connection visible at once, grouped, searchable ---------------------
+    // One renderer for the Connections window and for the "Pick a database" screen.
 
+    static TYPE_COLOR = { mysql: '#d9822b', postgresql: '#336791', sqlite: '#5b6abf', sqlserver: '#a4373a', oracle: '#c0392b',
+                          mongodb: '#3f9142', redis: '#c0392b', cassandra: '#1287b1' };
+    static TYPE_ABBR = { mysql: 'My', postgresql: 'Pg', sqlite: 'Sq', sqlserver: 'Ms', oracle: 'Or', mongodb: 'Mg', redis: 'Rd', cassandra: 'Ca' };
+    static GROUPS = [['production', 'Production'], ['staging', 'Staging'], ['development', 'Development'], ['local', 'Local'], ['', 'Not tagged']];
+
+    // Where a connection points, in a few words: enough to tell two with the same name apart
+    connWhere(conn) {
+        if (conn.type === 'sqlite') return (conn.database || '').split(/[\\/]/).filter(Boolean).pop() || 'SQLite file';
+        const host = conn.host ? conn.host + (conn.port ? ':' + conn.port : '') : '';
+        return [host, conn.database].filter(Boolean).join(' / ') || conn.connection_url || '';
+    }
+
+    timeAgo(seconds) {
+        if (!seconds) return '';
+        const d = Math.max(0, Date.now() / 1000 - seconds);
+        const units = [[31536000, 'y'], [2592000, 'mo'], [604800, 'w'], [86400, 'd'], [3600, 'h'], [60, 'm']];
+        for (const [size, label] of units) if (d >= size) return Math.floor(d / size) + label + ' ago';
+        return 'just now';
+    }
+
+    connectionTile(conn, mode) {
+        const isConnected = this.connectedConnections.has(conn.id);
+        const isActive = this.activeConnection?.id === conn.id;
+        const item = document.createElement('div');
+        // The Connections window keeps its original class names; the picker screen's tiles are separate so the two
+        // never answer to the same selector while both are in the page.
+        item.className = (mode === 'manager' ? 'connection-item conn-tile' : 'conn-tile') + (isActive ? ' active' : isConnected ? ' connected' : '');
+        item.tabIndex = 0;
+        item.dataset.id = conn.id;
+        const color = ConnectionManager.TYPE_COLOR[conn.type] || '#6b7683';
+        const where = this.connWhere(conn);
+        const used = this.timeAgo(conn.last_used);
+        item.innerHTML = `
+            <div class="connection-info">
+                <span class="conn-avatar" style="background:${color}">${this.esc(ConnectionManager.TYPE_ABBR[conn.type] || (conn.type || '?').slice(0, 2))}</span>
+                <div class="conn-text">
+                    <div class="connection-name">${isConnected ? '<span class="conn-dot" title="Connected"></span>' : ''}${this.esc(conn.name)}</div>
+                    <div class="conn-where">${this.esc(where) || '&nbsp;'}</div>
+                    <div class="conn-tags">
+                        <span class="connection-type">${this.esc(conn.type)}</span>
+                        ${this.envTag(conn)}
+                        ${conn.read_only ? '<span class="connection-type ro" title="Writes are blocked on this connection">read-only</span>' : ''}
+                        ${used ? `<span class="conn-used" title="Last opened">${this.esc(used)}</span>` : ''}
+                    </div>
+                </div>
+            </div>
+            ${mode === 'manager' ? `<div class="connection-actions">
+                <button class="connect-btn" title="${isConnected ? 'Disconnect' : 'Connect'}">${isConnected ? 'Disconnect' : 'Connect'}</button>
+                <button class="edit-btn" title="Edit connection" aria-label="Edit connection">Edit</button>
+                <button class="delete-btn" title="Delete connection" aria-label="Delete connection">Delete</button>
+            </div>` : ''}`;
+
+        // user text goes in as properties, never into attribute markup
+        item.querySelector('.conn-where').title = where;
+        const connectBtn = item.querySelector('.connect-btn');
+        if (connectBtn) { connectBtn.dataset.id = conn.id; item.querySelector('.delete-btn').dataset.id = conn.id; }
+        const open = () => {
+            if (isConnected) this.switchToConnection(conn.id); else this.connect(conn.id);
+            if (mode === 'manager') this.hideConnectionsManager();
+        };
+        item.querySelector('.connection-info').addEventListener('click', (e) => { e.stopPropagation(); open(); });
+        if (connectBtn) {
+            item.querySelector('.edit-btn').addEventListener('click', (e) => { e.stopPropagation(); this.editConnection(conn); });
+            connectBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.connectedConnections.has(conn.id)) this.disconnect(conn.id); else this.connect(conn.id);
+            });
+            item.querySelector('.delete-btn').addEventListener('click', (e) => { e.stopPropagation(); this.deleteConnection(conn.id); });
+        }
+        item.addEventListener('keydown', (e) => {
+            if (e.target !== item) return;
+            if (e.key === 'Enter') { e.preventDefault(); open(); }
+        });
+        return item;
+    }
+
+    renderGrid(container, mode = 'manager') {
+        if (!container) return;
+        container.innerHTML = '';
         if (this.connections.length === 0) {
             container.innerHTML = `
                 <div class="tree-message">
@@ -86,73 +171,99 @@ class ConnectionManager {
             `;
             return;
         }
+        this.collapsed = this.collapsed || new Set();
+        const search = document.createElement('input');
+        search.type = 'search';
+        search.className = 'conn-search';
+        search.placeholder = `Search ${this.connections.length} connection${this.connections.length === 1 ? '' : 's'}…`;
+        search.setAttribute('aria-label', 'Search connections');
+        search.autocomplete = 'off';
+        search.setAttribute('autocapitalize', 'off');
+        search.setAttribute('autocorrect', 'off');
+        search.spellcheck = false;
+        const groupsEl = document.createElement('div');
+        groupsEl.className = 'conn-groups';
+        container.append(search, groupsEl);
 
-        this.connections.forEach(conn => {
-            const item = document.createElement('div');
-            item.className = 'connection-item';
-
-            const isConnected = this.connectedConnections.has(conn.id);
-            const isActive = this.activeConnection?.id === conn.id;
-
-            if (isActive) {
-                item.classList.add('active');
-            } else if (isConnected) {
-                item.classList.add('connected');
+        const draw = () => {
+            const q = search.value.trim().toLowerCase();
+            const match = (c) => !q || [c.name, c.type, c.environment, c.host, c.database].some(v => String(v ?? '').toLowerCase().includes(q));
+            const shown = this.connections.filter(match);
+            const recent = (a, b) => (b.last_used || 0) - (a.last_used || 0) || String(a.name).localeCompare(String(b.name));
+            const open = shown.filter(c => this.connectedConnections.has(c.id)).sort(recent);
+            const rest = shown.filter(c => !this.connectedConnections.has(c.id));
+            const groups = [['open', 'Open now', open]];
+            const known = new Set(ConnectionManager.GROUPS.map(g => g[0]));
+            for (const [env, label] of ConnectionManager.GROUPS) {
+                groups.push([env || 'none', label, rest.filter(c => (known.has(c.environment || '') ? (c.environment || '') : '') === env).sort(recent)]);
             }
-
-            item.innerHTML = `
-                <div class="connection-info">
-                    <div class="connection-name">${this.esc(conn.name)}</div>
-                    <span class="connection-type">${this.esc(conn.type)}</span>
-                    ${this.envTag(conn)}
-                    ${conn.read_only ? '<span class="connection-type ro" title="Writes are blocked on this connection">read-only</span>' : ''}
-                </div>
-                <div class="connection-actions">
-                    <button class="connect-btn" data-id="${conn.id}" title="${isConnected ? 'Disconnect' : 'Connect'}">
-                        ${isConnected ? 'Disconnect' : 'Connect'}
-                    </button>
-                    <button class="edit-btn" title="Edit connection" aria-label="Edit connection">Edit</button>
-                    <button class="delete-btn" data-id="${conn.id}" title="Delete connection" aria-label="Delete connection">Delete</button>
-                </div>
-            `;
-
-            item.querySelector('.edit-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.editConnection(conn);
-            });
-
-            // Click on connection name to switch (if already connected)
-            item.querySelector('.connection-info').addEventListener('click', (e) => {
-                e.stopPropagation();
-                if (isConnected) {
-                    this.switchToConnection(conn.id);
-                    this.hideConnectionsManager();
-                } else {
-                    this.connect(conn.id);
-                    this.hideConnectionsManager();
+            groupsEl.innerHTML = '';
+            if (!shown.length) {
+                groupsEl.innerHTML = `<div class="tree-message">Nothing matches "${this.esc(search.value.trim())}".</div>`;
+                return;
+            }
+            for (const [key, label, list] of groups) {
+                if (!list.length) continue;
+                const closed = !q && this.collapsed.has(key);
+                const section = document.createElement('section');
+                section.className = 'conn-group';
+                const head = document.createElement('button');
+                head.type = 'button';
+                head.className = 'conn-group-head';
+                head.setAttribute('aria-expanded', String(!closed));
+                head.innerHTML = `<span class="conn-caret">${closed ? '▸' : '▾'}</span><span>${this.esc(label)}</span><span class="conn-count">${list.length}</span>`;
+                head.addEventListener('click', () => {
+                    if (this.collapsed.has(key)) this.collapsed.delete(key); else this.collapsed.add(key);
+                    draw();
+                });
+                section.appendChild(head);
+                if (!closed) {
+                    const grid = document.createElement('div');
+                    grid.className = 'conn-grid';
+                    list.forEach(c => grid.appendChild(this.connectionTile(c, mode)));
+                    section.appendChild(grid);
                 }
-            });
+                groupsEl.appendChild(section);
+            }
+        };
+        search.addEventListener('input', draw);
 
-            // Connect/disconnect button
-            item.querySelector('.connect-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                const id = e.target.getAttribute('data-id');
-                if (this.connectedConnections.has(id)) {
-                    this.disconnect(id);
-                } else {
-                    this.connect(id);
-                }
-            });
-
-            // Delete button
-            item.querySelector('.delete-btn').addEventListener('click', (e) => {
-                e.stopPropagation();
-                const id = e.target.getAttribute('data-id');
-                this.deleteConnection(id);
-            });
-
-            container.appendChild(item);
+        // Arrow keys walk the tiles, Enter opens one, Escape returns to the search box
+        container.addEventListener('keydown', (e) => {
+            const tiles = [...container.querySelectorAll('.conn-tile')];
+            const at = tiles.indexOf(document.activeElement);
+            const step = { ArrowDown: 'down', ArrowUp: 'up', ArrowRight: 1, ArrowLeft: -1 }[e.key];
+            if (step === undefined) {
+                if (e.key === 'Escape' && at >= 0) { e.preventDefault(); e.stopPropagation(); search.focus(); }
+                return;
+            }
+            if (document.activeElement === search && (step === 'down' || step === 1)) {
+                if (tiles[0]) { e.preventDefault(); tiles[0].focus(); }
+                return;
+            }
+            if (at < 0) return;
+            e.preventDefault();
+            let to = at;
+            if (step === 1 || step === -1) to = at + step;
+            else {                       // up/down: the nearest tile in the row above or below, in the same column
+                const here = tiles[at].getBoundingClientRect();
+                const rows = tiles.filter(t => (step === 'down' ? t.getBoundingClientRect().top > here.top + 4 : t.getBoundingClientRect().top < here.top - 4));
+                if (rows.length) {
+                    const target = step === 'down' ? Math.min(...rows.map(t => t.getBoundingClientRect().top)) : Math.max(...rows.map(t => t.getBoundingClientRect().top));
+                    const inRow = rows.filter(t => Math.abs(t.getBoundingClientRect().top - target) < 4);
+                    to = tiles.indexOf(inRow.reduce((best, t) => Math.abs(t.getBoundingClientRect().left - here.left) < Math.abs(best.getBoundingClientRect().left - here.left) ? t : best));
+                } else if (step === 'up') { search.focus(); return; }
+            }
+            if (tiles[to]) tiles[to].focus();
         });
+        draw();
+    }
+
+    // "/" jumps to the search box of whichever connection grid is on screen
+    focusConnectionSearch() {
+        const boxes = [...document.querySelectorAll('.conn-search')].filter(b => b.offsetParent !== null);
+        if (boxes.length) { boxes[0].focus(); boxes[0].select(); return true; }
+        return false;
     }
 
     showConnectionsManager() {

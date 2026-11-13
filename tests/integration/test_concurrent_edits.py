@@ -14,6 +14,7 @@ from test_connectors import BACKENDS, Backend, ensure_cassandra_keyspace, new_co
 pytestmark = pytest.mark.integration
 ROUNDS = 25
 ALL = BACKENDS + [Backend('redis', RedisConnector, 16379, {}, db='1')]
+TABLE = 'qa_scratch'          # not 'people': other tests, and the SSH browser tests, rely on that table's contents
 
 
 @pytest.fixture(params=ALL, ids=lambda b: b.id)
@@ -26,17 +27,17 @@ def pair(request):
         b.db = b.params['database']
     ensure_cassandra_keyspace(b)
     first = new_connector(b)
-    for stmt in b.ddl:
+    for stmt in [d.replace('people', TABLE) for d in b.ddl]:
         assert not first.execute_query(stmt).get('error'), stmt
     if b.id == 'mongodb':
-        first.connection[b.db]['people'].drop()
+        first.connection[b.db][TABLE].drop()
     if b.id == 'redis':
         first.connection.flushdb()
     row = {'key': 'race:1', 'value': 'base'} if b.id == 'redis' else {'id': 1, 'name': 'base', 'country': 'IN', 'score': 1}
     if b.id == 'redis':
         first.connection.set('race:1', 'base')
     else:
-        assert first.insert_row('people', row, b.db)[0]
+        assert first.insert_row(TABLE, row, b.db)[0]
     second = new_connector(b)
     yield b, first, second
     first.disconnect()
@@ -47,11 +48,11 @@ def reset(b, conn):
     if b.id == 'redis':
         conn.connection.set('race:1', 'base')
     else:
-        assert conn.update_row('people', {'id': 1}, {'name': 'base'}, b.db)[0]
+        assert conn.update_row(TABLE, {'id': 1}, {'name': 'base'}, b.db)[0]
 
 
 def edit(b, who):
-    table, cond, col = ('*', {'key': 'race:1'}, 'value') if b.id == 'redis' else ('people', {'id': 1}, 'name')
+    table, cond, col = ('*', {'key': 'race:1'}, 'value') if b.id == 'redis' else (TABLE, {'id': 1}, 'name')
     return table, [{'op': 'update', 'conditions': cond, 'data': {col: who}, 'expected': {col: 'base'}}]
 
 

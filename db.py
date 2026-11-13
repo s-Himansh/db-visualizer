@@ -868,6 +868,20 @@ def open_sample():
         return jsonify({'success': True, 'id': conn['id']})
 
 
+def touch_last_used(connection_id: str):
+    """Remember when a connection was last opened, so the picker can put recent ones first. Never fails a connect."""
+    try:
+        with CONNECTIONS_LOCK:
+            connections = load_connections()
+            for conn in connections:
+                if conn.get('id') == connection_id:
+                    conn['last_used'] = int(time.time())
+                    save_connections(connections)
+                    return
+    except Exception:
+        logger.exception('Could not record when %s was last used', connection_id)
+
+
 @app.route('/api/connections', methods=['GET'])
 def get_connections():
     """Get all saved connections (without passwords)."""
@@ -1000,6 +1014,7 @@ def connect():
     connector = create_connector(conn_params)
     if connector.connect():
         active_connections[connection_id] = SerializedConnector(connector, tunnel)
+        touch_last_used(connection_id)
         return jsonify({'success': True, 'message': 'Connected successfully'})
     if tunnel:
         tunnel.stop()
