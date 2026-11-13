@@ -330,6 +330,10 @@ class BaseConnector(ABC):
     def _lock_rows(self, table: str, conditions: Dict[str, Any], database: Optional[str]):
         """Lock the rows about to be checked and changed, so nobody can change them in between."""
 
+    def _current_rows(self, table, conditions, database) -> List[dict]:
+        """The rows that match `conditions` right now, as the grid would show them."""
+        return self.get_table_data(table, database, limit=2, filters=dict(conditions))['rows']
+
     def _find_conflicts(self, table, operations, database) -> List[dict]:
         """Rows whose edited cells no longer hold what the user saw: someone else changed them (or deleted the row)."""
         conflicts = []
@@ -338,7 +342,7 @@ class BaseConnector(ABC):
             if op.get('op') != 'update' or not expected or not op.get('conditions'):
                 continue
             self._lock_rows(table, op['conditions'], database)
-            rows = self.get_table_data(table, database, limit=2, filters=dict(op['conditions']))['rows']
+            rows = self._current_rows(table, op['conditions'], database)
             if not rows:
                 conflicts += [{'index': i, 'column': c, 'expected': e, 'actual': None} for c, e in expected.items()][:1]
                 continue
@@ -378,6 +382,11 @@ class BaseConnector(ABC):
         if dry_run and not self.SUPPORTS_TRANSACTIONS:
             return {'success': False, 'rolled_back': False, 'applied': 0, 'error': 'A check without saving needs a database that can roll back.'}
         if not self.SUPPORTS_TRANSACTIONS:
+            # nothing to roll back, but a row someone else changed is still reported before anything is written
+            conflicts = [] if force else self._find_conflicts(table, operations, database)
+            if conflicts:
+                return {'success': False, 'rolled_back': True, 'conflicts': conflicts,
+                        'error': 'Some rows were changed by someone else since you loaded them. Nothing was saved.'}
             results = []
             for i, op in enumerate(operations):
                 ok, msg = self._apply_op(table, op, database)

@@ -77,7 +77,7 @@ class DatabaseSearch {
         if (!body.success) { this.message(body.error); return; }
 
         const notes = [];
-        if (body.scanned < body.tables) notes.push(`Searched ${body.scanned} of ${body.tables} tables (stopped after ${body.seconds}s).`);
+        if (body.scanned < body.tables) notes.push(`Searched ${body.scanned} of ${body.tables} tables; the rest were skipped to keep this quick.`);
         if (body.failed) notes.push(`${body.failed} table${body.failed === 1 ? ' was' : 's were'} skipped because they could not be read.`);
         if (!body.results.length) { this.message([`Nothing found for "${term}".`, ...notes].join(' ')); return; }
 
@@ -99,7 +99,7 @@ class DatabaseSearch {
         });
         const head = document.createElement('div');
         head.className = 'palette-group';
-        head.textContent = `${body.results.length} table${body.results.length === 1 ? '' : 's'} contain "${term}"`;
+        head.textContent = body.results.length === 1 ? `1 table contains "${term}"` : `${body.results.length} tables contain "${term}"`;
         this.list.replaceChildren(head, ...rows, ...notes.map(n => Object.assign(document.createElement('div'), { className: 'palette-group', textContent: n })));
     }
 

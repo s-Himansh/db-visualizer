@@ -171,41 +171,16 @@ class RedisConnector(BaseConnector):
 
     def get_schema(self, table: str, database: Optional[str] = None) -> Dict[str, Any]:
         """
-        Get schema for a Redis key pattern.
-        Returns sample keys and their types.
+        The columns of a Redis "table" are the ones its grid shows: key, type, value and ttl. The key is the row's
+        identity (the primary key), which is what an edit uses to say which row it means.
         """
         try:
-            # Switch database if specified
-            if database:
-                db_num = int(database.replace('db', ''))
-                self.connection.execute_command('SELECT', db_num)
-
-            # Get sample keys matching the pattern
-            cursor = 0
-            sample_keys = []
-            max_samples = 20
-
-            while len(sample_keys) < max_samples:
-                cursor, keys = self.connection.scan(cursor, match=table, count=100)
-                sample_keys.extend(keys[:max_samples - len(sample_keys)])
-                if cursor == 0:
-                    break
-
-            # Analyze key types and structures
-            columns = []
-            for key in sample_keys:
-                key_type = self.connection.type(key)
-                ttl = self.connection.ttl(key)
-
-                columns.append({
-                    'name': key,
-                    'type': key_type,
-                    'nullable': False,
-                    'default': None,
-                    'primary_key': True,
-                    'ttl': ttl if ttl > 0 else None
-                })
-
+            columns = [
+                {'name': 'key', 'type': 'string', 'nullable': False, 'default': None, 'primary_key': True},
+                {'name': 'type', 'type': 'string', 'nullable': False, 'default': None, 'primary_key': False},
+                {'name': 'value', 'type': 'string', 'nullable': True, 'default': None, 'primary_key': False},
+                {'name': 'ttl', 'type': 'integer', 'nullable': True, 'default': None, 'primary_key': False},
+            ]
             return {
                 'columns': columns,
                 'indexes': [],
@@ -345,6 +320,14 @@ class RedisConnector(BaseConnector):
         except Exception as e:
             logger.error(f"Error getting table data: {e}")
             raise
+
+    def _current_rows(self, table, conditions, database):
+        """A key is looked up by name: the pattern search would treat `*` or `[` in a key as wildcards."""
+        key = conditions.get('key')
+        if not key:
+            return []
+        escaped = ''.join('\\' + ch if ch in '*?[]\\' else ch for ch in key)
+        return [r for r in self.get_table_data(escaped, database, limit=2)['rows'] if r['key'] == key]
 
     def insert_row(
         self,
