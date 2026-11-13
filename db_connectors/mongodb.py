@@ -6,7 +6,7 @@ import re
 import time
 from datetime import datetime, date
 from typing import Any, Dict, List, Optional, Tuple
-from .base import BaseConnector
+from .base import BaseConnector, restore_big_ints
 
 
 def serialize_value(value):
@@ -374,6 +374,9 @@ class MongoDBConnector(BaseConnector):
             for key, value in doc.items():
                 doc[key] = serialize_value(value)
         return docs
+
+    def _coerce_conditions(self, conditions):
+        return restore_big_ints(conditions)
 
     def insert_row(
         self,

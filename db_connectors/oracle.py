@@ -16,6 +16,10 @@ def serialize_value(value):
         return value.strftime('%Y-%m-%d %H:%M:%S')
     elif isinstance(value, date):
         return value.strftime('%Y-%m-%d')
+    elif hasattr(value, 'read') and hasattr(value, 'size'):    # a CLOB or BLOB arrives as a handle, not a value
+        size = value.size()
+        # shortcut: a LOB over 1 MB is not loaded into the grid; upgrade to a viewer that streams it
+        return value.read() if size <= 1_000_000 else f'(large object, {size} bytes)'
     return value
 
 
