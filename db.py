@@ -1005,7 +1005,9 @@ def get_databases():
         # This prevents showing all databases in a PostgreSQL/MySQL cluster
         connected_db = connector.connection_params.get('database')
 
-        if connected_db:
+        if connector.db_type == 'oracle':
+            databases = [connector.current_schema()]   # the service name in the form owns no tables; the login's schema does
+        elif connected_db:
             # Return only the connected database
             databases = [connected_db]
         else:

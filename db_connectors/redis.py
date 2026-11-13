@@ -329,7 +329,7 @@ class RedisConnector(BaseConnector):
                 rows.append({
                     'key': key,
                     'type': key_type,
-                    'value': str(value),
+                    'value': json.dumps(value, default=str) if isinstance(value, (dict, list)) else str(value),
                     'ttl': ttl if ttl > 0 else None
                 })
 

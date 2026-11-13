@@ -44,8 +44,6 @@ def up(port):
 @pytest.fixture(params=list(SQL), ids=list(SQL))
 def real(request, page):
     spec = SQL[request.param]
-    if request.param == 'oracle':
-        pytest.skip('UI navigation to an Oracle schema is not automated here; Oracle is covered by the connector contract tests')
     if not up(spec['port']):
         pytest.skip(f'{request.param} test server not running')
     from db_connectors import mysql, oracle, postgres, sqlserver

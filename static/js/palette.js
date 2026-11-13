@@ -58,7 +58,7 @@ class CommandPalette {
         const actions = [
             ['New query', 'write SQL', () => document.getElementById('new-query-tab-btn').click(), !!active],
             ['Show the schema map', 'how tables relate', () => mapBtn.click(), !!active && !!database],
-            ['Search all tables for a value', 'find a value in any column of any table', () => app.search.open(), !!active && !!database],
+            ['Search all tables for a value', 'find a value in any column of any table', () => app.search.open(), !!active && !!database && cm.isSql(active.id)],
             ['Refresh the table list', 'read the database again', () => document.getElementById('refresh-btn').click(), !!active],
             ['Ask the SQL assistant', 'describe a query in plain English', () => {
                 const tm = app.tabManager, current = tm.tabs.get(tm.activeTabId);
