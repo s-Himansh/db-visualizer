@@ -1,3 +1,4 @@
+import os
 import json
 import sqlite3
 
@@ -67,7 +68,8 @@ def test_the_key_is_encrypted_on_disk_and_never_returned(client, fake):
     assert r.get_json()['enabled'] and r.get_json()['has_key']
     assert 'sk-ant-test-key-123' not in db.SETTINGS_FILE.read_text()
     assert 'sk-ant' not in client.get('/api/ai/settings').get_data(as_text=True)
-    assert oct(db.SETTINGS_FILE.stat().st_mode & 0o777) == '0o600'
+    if os.name != 'nt':   # Windows has no Unix permission bits; the user profile's own access rules protect the file
+        assert oct(db.SETTINGS_FILE.stat().st_mode & 0o777) == '0o600'
 
 
 def test_turning_it_off_and_removing_the_key(client, fake):

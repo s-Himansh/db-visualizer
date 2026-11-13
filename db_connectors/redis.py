@@ -365,9 +365,11 @@ class RedisConnector(BaseConnector):
         table: str,
         conditions: Dict[str, Any],
         data: Dict[str, Any],
-        database: Optional[str] = None
+        database: Optional[str] = None,
+        only_if: Optional[Dict[str, Any]] = None
     ) -> Tuple[bool, str]:
-        """Update a key's value in Redis."""
+        """Update a key's value in Redis. `only_if` makes it an atomic compare-and-set (WATCH): nothing is written if
+        the key changed after it was read."""
         try:
             # Switch database if specified
             if database:
@@ -383,6 +385,25 @@ class RedisConnector(BaseConnector):
             # Check if key exists
             if not self.connection.exists(key):
                 return False, f"Key '{key}' does not exist"
+
+            if only_if:
+                with self.connection.pipeline() as pipe:
+                    pipe.watch(key)
+                    now = self._current_rows('*', {'key': key}, database)
+                    if not now or any(str(now[0].get(c, '')) != ('' if v is None else str(v)) for c, v in only_if.items()):
+                        pipe.unwatch()
+                        self.last_conflict = True
+                        return False, 'The key changed while you were saving'
+                    pipe.multi()
+                    pipe.set(key, value)
+                    if 'ttl' in data and data['ttl']:
+                        pipe.expire(key, int(data['ttl']))
+                    try:
+                        pipe.execute()
+                    except redis.WatchError:
+                        self.last_conflict = True
+                        return False, 'The key changed while you were saving'
+                return True, f"Key '{key}' updated successfully"
 
             # Update value
             self.connection.set(key, value)

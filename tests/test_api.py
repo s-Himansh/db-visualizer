@@ -1,3 +1,4 @@
+import os
 import pytest
 import base64
 import json
@@ -60,7 +61,8 @@ def test_undecryptable_password_keeps_connection(client):
 def test_secret_files_are_private():
     client_pw = db.encrypt_password('x')  # creates the key if missing
     assert client_pw
-    assert oct(db.KEY_FILE.stat().st_mode & 0o777) == '0o600'
+    if os.name != 'nt':   # Windows has no Unix permission bits; the user profile's own access rules protect the file
+        assert oct(db.KEY_FILE.stat().st_mode & 0o777) == '0o600'
 
 
 def test_cert_upload_becomes_file_and_is_removed_on_delete(client):

@@ -1,4 +1,5 @@
 import logging
+from decimal import Decimal
 logger = logging.getLogger(__name__)
 from cassandra.cluster import Cluster, ExecutionProfile, EXEC_PROFILE_DEFAULT
 from cassandra.policies import DCAwareRoundRobinPolicy, TokenAwarePolicy
@@ -73,6 +74,9 @@ class CassandraConnector(BaseConnector):
 
             # Connect to cluster
             self.connection = self.cluster.connect(keyspace=keyspace)
+            # Writes are ordered by timestamp. A lightweight transaction takes the server's clock, an ordinary write the
+            # client's by default, so a client clock ahead of the server's made a later write lose silently. One clock.
+            self.connection.use_client_timestamp = False
 
             # Store keyspace for later use
             self.current_keyspace = keyspace
@@ -393,9 +397,11 @@ class CassandraConnector(BaseConnector):
         table: str,
         conditions: Dict[str, Any],
         data: Dict[str, Any],
-        database: Optional[str] = None
+        database: Optional[str] = None,
+        only_if: Optional[Dict[str, Any]] = None
     ) -> Tuple[bool, str]:
-        """Update row(s) in a Cassandra table."""
+        """Update row(s) in a Cassandra table. `only_if` adds a lightweight-transaction condition, so the write is
+        applied only while those columns still hold what the user saw."""
         try:
             keyspace = database or self.current_keyspace
             if not keyspace:
@@ -419,6 +425,15 @@ class CassandraConnector(BaseConnector):
                 return False, "No matching row to update (it may have been deleted)"
 
             query = f"UPDATE {self.q(keyspace)}.{self.q(table)} SET {', '.join(set_clauses)} WHERE {' AND '.join(where_clauses)}"
+            # shortcut: only plain values are compared; a collection, UDT or blob column is left unguarded
+            guard = {c: v for c, v in (only_if or {}).items() if v is None or isinstance(v, (str, int, float, bool, Decimal))}
+            if guard:
+                query += ' IF ' + ' AND '.join(f"{self.q(c)} = %s" for c in guard)
+                outcome = self.connection.execute(query, set_values + where_values + list(guard.values())).one()
+                if outcome is not None and not outcome[0]:
+                    self.last_conflict = True
+                    return False, 'The row changed while you were saving'
+                return True, "Row updated successfully"
             self.connection.execute(query, set_values + where_values)
 
             return True, "Row updated successfully"

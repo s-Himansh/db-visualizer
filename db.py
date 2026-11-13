@@ -15,7 +15,7 @@ from pathlib import Path
 from cryptography.fernet import Fernet
 import base64
 import shutil
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Dict, Any, Optional
 
 # Import connectors
@@ -363,6 +363,26 @@ QUERY_TIMEOUT = int(os.environ.get('DBV_QUERY_TIMEOUT', 60))  # seconds; 0 disab
 # Connection-level calls that must not trigger a health check (they are how the check itself works)
 _NO_HEALTH_CHECK = {'connect', 'disconnect', 'test_connection', 'ping', 'is_connected', 'get_connection_info'}
 cancel_reasons: Dict[str, str] = {}  # why a running query was stopped, so the user sees a clear message
+# Reads that are safe to repeat once if the connection turns out to have died under them (a write could apply twice)
+_READS = {'get_databases', 'get_tables', 'get_schema', 'get_table_data', 'get_relations', 'get_columns'}
+
+
+class _ErrorWatch(logging.Handler):
+    """Most connectors catch a database error, log it and return an empty answer, so a dead connection looks like a
+    database with no tables. This notes an error logged by a connector, per thread, so the wrapper can tell."""
+    def __init__(self):
+        super().__init__(level=logging.ERROR)
+        self.seen = threading.local()
+
+    def emit(self, record):
+        self.seen.count = getattr(self.seen, 'count', 0) + 1
+
+    def count(self):
+        return getattr(self.seen, 'count', 0)
+
+
+error_watch = _ErrorWatch()
+logging.getLogger('db_connectors').addHandler(error_watch)
 
 
 class SerializedConnector:
@@ -419,11 +439,18 @@ class SerializedConnector:
             with self._lock:
                 if check:
                     self._ensure_alive()
+                errors_before = error_watch.count()
                 try:
                     result = attr(*args, **kwargs)
                 except Exception:
                     self._suspect = True
                     raise
+                if error_watch.count() > errors_before and check and not self._connector.ping():
+                    # the connector swallowed an error and the connection is dead: reconnect, and for a read, ask again
+                    self._suspect = True
+                    self._ensure_alive()
+                    if name in _READS:
+                        result = attr(*args, **kwargs)
                 if isinstance(result, dict) and result.get('error'):
                     self._suspect = True  # connectors report failures as data; ping before the next call
                 self._last_used = time.monotonic()
@@ -616,6 +643,20 @@ def clean_query_fields(data: dict, need_both: bool):
     return (name.strip() if name is not None else None), sql, None
 
 
+_last_stamp = ['']
+
+
+def _stamp() -> str:
+    """A time that is always later than the previous one. The clock on Windows ticks coarsely, so two saves in quick
+    succession got the same time and the list could not tell which was newer."""
+    now = datetime.now()
+    stamp = now.isoformat(timespec='microseconds')
+    if stamp <= _last_stamp[0]:
+        stamp = (datetime.fromisoformat(_last_stamp[0]) + timedelta(microseconds=1)).isoformat(timespec='microseconds')
+    _last_stamp[0] = stamp
+    return stamp
+
+
 def query_summary(q: dict) -> dict:
     return {k: q.get(k) for k in ('id', 'name', 'sql', 'connection_name', 'updated')}
 
@@ -641,7 +682,7 @@ def create_saved_query():
         return jsonify({'success': False, 'error': problem}), 400
     connection = data.get('connection_name')
     connection = connection.strip()[:MAX_QUERY_NAME] if isinstance(connection, str) and connection.strip() else None
-    now = datetime.now().isoformat(timespec='microseconds')
+    now = _stamp()
     with SAVED_QUERIES_LOCK:
         queries = load_saved_queries()
         existing = find_by_name(queries, name)
@@ -680,7 +721,7 @@ def update_saved_query(query_id):
             target['name'] = name
         if sql is not None:
             target['sql'] = sql
-        target['updated'] = datetime.now().isoformat(timespec='microseconds')
+        target['updated'] = _stamp()
         write_saved_queries(queries)
     return jsonify({'success': True, 'query': query_summary(target)})
 

@@ -2396,7 +2396,7 @@ class TabManager {
                     : `${label(operations[c.index])}: ${c.column} was "${c.expected ?? ''}" when you loaded it, now "${c.actual}"`);
                 const more = result.conflicts.length > 5 ? `\n…and ${result.conflicts.length - 5} more` : '';
                 const agreed = await ui.confirm(
-                    `${rows.length} row${rows.length === 1 ? ' was' : 's were'} changed by someone else while you were editing. Nothing has been saved.\n\n` +
+                    `${rows.length} row${rows.length === 1 ? ' was' : 's were'} changed by someone else while you were editing. ${result.applied ? `${result.applied} earlier change${result.applied === 1 ? ' was' : 's were'} already saved.` : 'Nothing has been saved.'}\n\n` +
                     `${lines.join('\n')}${more}\n\nSaving anyway overwrites their change with yours.`,
                     { title: 'Changed since you loaded it', confirmLabel: 'Save anyway', cancelLabel: 'Keep editing', danger: true });
                 if (!agreed) return false;

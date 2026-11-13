@@ -20,6 +20,11 @@ def serialize_value(value):
     return value
 
 
+class _Doc(dict):
+    """A document as the grid shows it, remembering the typed values it came from."""
+    raw: dict = {}
+
+
 class MongoDBConnector(BaseConnector):
     """MongoDB database connector implementation."""
 
@@ -369,11 +374,13 @@ class MongoDBConnector(BaseConnector):
             except Exception:
                 pass
         docs = list(self.connection[database or self.connection_params.get('database', 'admin')][table].find(query).limit(2))
+        shown = []
         for doc in docs:
-            doc['_id'] = str(doc['_id'])
-            for key, value in doc.items():
-                doc[key] = serialize_value(value)
-        return docs
+            row = _Doc({k: serialize_value(v) for k, v in doc.items()})
+            row['_id'] = str(doc['_id'])
+            row.raw = doc                          # the typed values, for a guarded write
+            shown.append(row)
+        return shown
 
     def _coerce_conditions(self, conditions):
         return restore_big_ints(conditions)
@@ -403,9 +410,11 @@ class MongoDBConnector(BaseConnector):
         table: str,
         conditions: Dict[str, Any],
         data: Dict[str, Any],
-        database: Optional[str] = None
+        database: Optional[str] = None,
+        only_if: Optional[Dict[str, Any]] = None
     ) -> Tuple[bool, str]:
-        """Update document(s) in a MongoDB collection."""
+        """Update document(s) in a MongoDB collection. `only_if` makes it a single atomic compare-and-set: the
+        document is changed only while those fields still hold the values the user saw."""
         try:
             if not database:
                 database = self.connection_params.get('database', 'admin')
@@ -421,6 +430,12 @@ class MongoDBConnector(BaseConnector):
                 except:
                     pass
 
+            if only_if:
+                result = collection.update_many({**conditions, **only_if}, {'$set': data})
+                if result.matched_count == 0:
+                    self.last_conflict = True
+                    return False, 'The document changed while you were saving'
+                return True, f"{result.modified_count} document(s) updated"
             result = collection.update_many(conditions, {'$set': data})
 
             return True, f"{result.modified_count} document(s) updated"
