@@ -112,3 +112,19 @@ def test_large_keyspace_reports_real_total_and_pages(r):
     assert first['total_count'] == 1000 and first['has_more'] is True
     assert keys(page(r, 'big:*', limit=10, offset=990)) == [f'big:{i:04d}' for i in range(990, 1000)]
     assert page(r, 'big:*', limit=10, offset=990)['has_more'] is False
+
+
+def test_a_key_changed_by_someone_else_is_reported_and_keys_with_wildcards_are_found(r):
+    for key in ('conflict:one', 'conflict:[x]*'):
+        r.connection.set(key, 'mine')
+        stale = r.apply_batch('*', [{'op': 'update', 'conditions': {'key': key}, 'data': {'value': 'edited'}, 'expected': {'value': 'older'}}], DB)
+        assert not stale['success'] and stale['conflicts'][0]['actual'] == 'mine'
+        assert r.connection.get(key) == 'mine'
+        fine = r.apply_batch('*', [{'op': 'update', 'conditions': {'key': key}, 'data': {'value': 'edited'}, 'expected': {'value': 'mine'}}], DB)
+        assert fine['success'] and r.connection.get(key) == 'edited'
+
+
+def test_schema_describes_the_grid_columns_with_the_key_as_primary_key(r):
+    columns = r.get_schema('user:*', DB)['columns']
+    assert [c['name'] for c in columns] == ['key', 'type', 'value', 'ttl']
+    assert [c['name'] for c in columns if c['primary_key']] == ['key']

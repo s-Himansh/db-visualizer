@@ -359,6 +359,22 @@ class MongoDBConnector(BaseConnector):
             logger.error(f"Error getting table data: {e}")
             raise
 
+    def _current_rows(self, table, conditions, database):
+        """The documents a stale-edit check compares against. An `_id` arrives as text and must be an ObjectId to match."""
+        query = dict(conditions)
+        if isinstance(query.get('_id'), str):
+            from bson import ObjectId
+            try:
+                query['_id'] = ObjectId(query['_id'])
+            except Exception:
+                pass
+        docs = list(self.connection[database or self.connection_params.get('database', 'admin')][table].find(query).limit(2))
+        for doc in docs:
+            doc['_id'] = str(doc['_id'])
+            for key, value in doc.items():
+                doc[key] = serialize_value(value)
+        return docs
+
     def insert_row(
         self,
         table: str,

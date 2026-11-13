@@ -13,7 +13,7 @@ concurrency:
 
 # Browser tests that talk to the Docker databases or the SSH server; every other e2e file runs in the `browser` job.
 env:
-  DOCKER_E2E: tests/e2e/test_real_db_saving.py tests/e2e/test_ui.py tests/e2e/test_ssh_ui.py
+  DOCKER_E2E: tests/e2e/test_real_db_saving.py tests/e2e/test_ui.py tests/e2e/test_ssh_ui.py tests/e2e/test_nosql_ui.py
 
 jobs:
   unit:

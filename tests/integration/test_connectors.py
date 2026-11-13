@@ -698,3 +698,57 @@ def test_reading_a_table_does_not_block_someone_else_changing_its_structure(env)
     finally:
         conn.execute_query(f'ALTER TABLE {q("people")} DROP COLUMN {q("tmp_col")}')
         app.disconnect()
+
+
+# ---- stale edits are caught on the databases that cannot roll back, too ---------------------------------------------
+
+def _no_rollback_only(b):
+    if b.id not in ('mongodb', 'cassandra'):
+        pytest.skip('SQL databases check this inside their transaction (tests above)')
+
+
+def test_a_row_changed_by_someone_else_is_reported_and_nothing_is_written(env):
+    b, conn = env
+    _no_rollback_only(b)
+    assert conn.insert_row('people', {'id': 950, 'name': 'mine', 'country': 'ST', 'score': 1}, b.db)[0]
+    try:
+        r = conn.apply_batch('people', [{'op': 'update', 'conditions': {'id': 950}, 'data': {'name': 'edited'}, 'expected': {'name': 'older'}}], b.db)
+        assert not r['success'] and r['conflicts'][0]['actual'] == 'mine' and r['rolled_back']
+        assert _name(conn, b, 950) == 'mine'
+        forced = conn.apply_batch('people', [{'op': 'update', 'conditions': {'id': 950}, 'data': {'name': 'edited'}, 'expected': {'name': 'older'}}], b.db, force=True)
+        assert forced['success'] and _name(conn, b, 950) == 'edited'
+    finally:
+        _cleanup(conn, b, 950)
+
+
+def test_an_unchanged_row_saves_without_a_false_conflict(env):
+    b, conn = env
+    _no_rollback_only(b)
+    assert conn.insert_row('people', {'id': 951, 'name': 'same', 'country': 'ST', 'score': 1}, b.db)[0]
+    try:
+        r = conn.apply_batch('people', [{'op': 'update', 'conditions': {'id': 951}, 'data': {'name': 'new'}, 'expected': {'name': 'same'}}], b.db)
+        assert r['success'] and _name(conn, b, 951) == 'new'
+    finally:
+        _cleanup(conn, b, 951)
+
+
+def test_editing_a_row_that_was_deleted_is_reported(env):
+    b, conn = env
+    _no_rollback_only(b)
+    r = conn.apply_batch('people', [{'op': 'update', 'conditions': {'id': 952}, 'data': {'name': 'x'}, 'expected': {'name': 'gone'}}], b.db)
+    assert not r['success'] and r['conflicts'][0]['actual'] is None
+
+
+def test_a_mongodb_document_is_found_by_its_text_id_for_the_stale_check(env):
+    b, conn = env
+    if b.id != 'mongodb':
+        pytest.skip('only MongoDB has an _id')
+    assert conn.insert_row('people', {'id': 953, 'name': 'doc', 'country': 'ST', 'score': 1}, b.db)[0]
+    try:
+        doc = data(conn, b, filters={'id': 953})['rows'][0]
+        ok = conn.apply_batch('people', [{'op': 'update', 'conditions': {'_id': doc['_id']}, 'data': {'name': 'new'}, 'expected': {'name': 'doc'}}], b.db)
+        assert ok['success'], ok
+        stale = conn.apply_batch('people', [{'op': 'update', 'conditions': {'_id': doc['_id']}, 'data': {'name': 'x'}, 'expected': {'name': 'doc'}}], b.db)
+        assert not stale['success'] and stale['conflicts'][0]['actual'] == 'new'
+    finally:
+        _cleanup(conn, b, 953)
