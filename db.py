@@ -1567,6 +1567,45 @@ def _sql_literal(value) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
 
+SEARCH_TABLES = 200      # shortcut: a plain scan table by table; very large databases get a partial answer, told to the user
+SEARCH_SECONDS = 20
+SEARCH_SAMPLE = 3
+
+
+@app.route('/api/search', methods=['GET'])
+def search_database():
+    """Which tables hold a value, in any column: the connector's own table search, run over every table."""
+    connection_id, database = request.args.get('connection_id'), request.args.get('database')
+    term = (request.args.get('term') or '').strip()
+    connector = get_connector(connection_id)
+    if not connector:
+        return jsonify({'success': False, 'error': 'Not connected'}), 400
+    if connector.db_type not in SQL_TYPES:
+        return jsonify({'success': False, 'error': 'Searching every table works with SQL databases.'}), 400
+    if len(term) < 2:
+        return jsonify({'success': False, 'error': 'Type at least two characters to search for.'}), 400
+    started, results, failed = time.time(), [], 0
+    try:
+        names = [t['name'] for t in connector.get_tables(database)]
+    except Exception as e:
+        return error_response(e)
+    scanned = 0
+    for name in names[:SEARCH_TABLES]:
+        if time.time() - started > SEARCH_SECONDS:
+            break
+        scanned += 1
+        try:
+            page = connector.get_table_data(table=name, database=database, limit=SEARCH_SAMPLE, offset=0,
+                                            filters={'search_term': term, 'search_column': None})
+        except Exception:
+            failed += 1
+            continue
+        if page.get('total_count'):
+            results.append({'table': name, 'total': page['total_count'], 'columns': page['columns'], 'rows': page['rows']})
+    return jsonify({'success': True, 'results': results, 'tables': len(names), 'scanned': scanned, 'failed': failed,
+                    'seconds': round(time.time() - started, 1)})
+
+
 @app.route('/api/export', methods=['GET'])
 def export_table():
     """The whole table (not just the page on screen) as a csv, json or SQL INSERT file."""

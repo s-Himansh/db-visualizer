@@ -472,3 +472,21 @@ def test_export_csv_and_json_cover_every_row(client, conn_id, sqlite_path):
 def test_export_rejects_unknown_format_and_missing_connection(client, conn_id, sqlite_path):
     assert export(client, conn_id, sqlite_path, 'xml').status_code == 400
     assert export(client, 'nope', sqlite_path, 'csv').status_code == 400
+
+
+# --- search every table -----------------------------------------------------------------------------------------
+
+def search(client, cid, path, term):
+    return client.get('/api/search', query_string=dict(connection_id=cid, database=path, term=term))
+
+
+def test_search_finds_the_tables_that_hold_a_value(client, conn_id, sqlite_path):
+    body = search(client, conn_id, sqlite_path, "O'Br").get_json()
+    assert body['success'] and [r['table'] for r in body['results']] == ['t']
+    assert body['results'][0]['total'] == 1 and body['scanned'] == body['tables']
+
+
+def test_search_with_no_match_or_too_short_a_term(client, conn_id, sqlite_path):
+    assert search(client, conn_id, sqlite_path, 'zzzzqq').get_json()['results'] == []
+    assert search(client, conn_id, sqlite_path, 'a').status_code == 400
+    assert search(client, 'nope', sqlite_path, 'alpha').status_code == 400
