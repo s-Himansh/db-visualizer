@@ -1,5 +1,6 @@
 """Where the password-encryption key lives, and what happens when the OS keychain misbehaves.
 The one rule above all: never replace a key that may exist, or every saved password becomes unreadable."""
+import os
 import json
 
 import pytest
@@ -84,7 +85,8 @@ def test_when_file_and_keychain_disagree_the_keychain_wins_and_the_file_is_left_
 def test_no_keychain_falls_back_to_a_private_key_file(monkeypatch):
     use(monkeypatch, None)
     assert db.decrypt_password(db.encrypt_password('pw')) == 'pw'
-    assert db.KEY_FILE.exists() and oct(db.KEY_FILE.stat().st_mode & 0o777) == '0o600'
+    if os.name != 'nt':   # Windows has no Unix permission bits; the user profile's own access rules protect the file
+        assert db.KEY_FILE.exists() and oct(db.KEY_FILE.stat().st_mode & 0o777) == '0o600'
 
 
 def test_locked_keychain_with_a_file_copy_uses_the_file(monkeypatch):

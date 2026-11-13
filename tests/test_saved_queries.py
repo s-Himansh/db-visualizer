@@ -44,7 +44,8 @@ def test_it_survives_a_restart(client):
 
 def test_the_file_is_private_to_the_user(client):
     save(client)
-    assert stat.S_IMODE(os.stat(db.SAVED_QUERIES_FILE).st_mode) == 0o600
+    if os.name != 'nt':   # Windows has no Unix permission bits; the user profile's own access rules protect the file
+        assert stat.S_IMODE(os.stat(db.SAVED_QUERIES_FILE).st_mode) == 0o600
 
 
 def test_the_most_recently_changed_comes_first(client):

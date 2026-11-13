@@ -17,6 +17,11 @@ import db  # noqa: E402
 def clean_state():
     for p in db.CONFIG_DIR.glob('connections.*'):
         p.unlink()
+    for c in list(db.active_connections.values()):
+        try:
+            c.disconnect()
+        except Exception:
+            pass
     db.active_connections.clear()
     yield
 

@@ -261,7 +261,8 @@ def test_the_search_is_cut_short_rather_than_run_forever(client, cid, shop, monk
 
 def test_the_decisions_file_is_private(client, cid, shop):
     decide(client, cid, shop, 'accept', 'orders', 'customer_id', 'customers')
-    assert stat.S_IMODE(os.stat(db.RELATION_DECISIONS_FILE).st_mode) == 0o600
+    if os.name != 'nt':   # Windows has no Unix permission bits; the user profile's own access rules protect the file
+        assert stat.S_IMODE(os.stat(db.RELATION_DECISIONS_FILE).st_mode) == 0o600
 
 
 def test_a_damaged_file_is_backed_up_and_the_app_carries_on(client, cid, shop):
