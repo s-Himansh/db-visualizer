@@ -497,3 +497,22 @@ def test_search_with_no_match_or_too_short_a_term(client, conn_id, sqlite_path):
 def test_desktop_window_allows_downloads():
     # a window cannot run in CI; this guards the one setting without which every Export does nothing in the desktop app
     assert "webview.settings['ALLOW_DOWNLOADS'] = True" in Path(db.__file__).read_text()
+
+
+def test_integers_a_browser_cannot_hold_are_sent_as_text(client, conn_id, sqlite_path):
+    import sqlite3
+    s = sqlite3.connect(sqlite_path)
+    s.execute('insert into t(id, name, v) values (?, ?, ?)', (9007199254740993, 'big', 1))
+    s.commit()
+    s.close()
+    rows = {r['name']: r for r in get_data(client, conn_id, sqlite_path).get_json()['data']['rows']}
+    assert rows['big']['id'] == '9007199254740993'      # exact, as text
+    assert rows['alpha']['id'] == 1 and rows['alpha']['v'] == 1.0   # ordinary numbers stay numbers
+
+
+def test_only_huge_whole_number_text_is_turned_back_into_a_number():
+    from db_connectors.base import restore_big_ints
+    got = restore_big_ints({'id': '1234567890123456789', 'neg': '-9007199254740993', 'small': '12', 'text': 'abc',
+                            'edge': '9007199254740991', 'zeros': '0000000000000042', 'none': None, 'num': 5})
+    assert got == {'id': 1234567890123456789, 'neg': -9007199254740993, 'small': '12', 'text': 'abc',
+                   'edge': '9007199254740991', 'zeros': '0000000000000042', 'none': None, 'num': 5}

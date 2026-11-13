@@ -28,6 +28,7 @@ from db_connectors.mongodb import MongoDBConnector
 from db_connectors.redis import RedisConnector
 from db_connectors.cassandra import CassandraConnector
 from db_connectors import safety
+from db_connectors.base import binary_text
 from sample_data import build_sample
 import ai_assistant
 import csv_import
@@ -35,14 +36,47 @@ import relationship_inference
 from db_connectors.tunnel import KnownHosts, SSHError, SSHTunnel, UnknownHostKey
 
 
+def plain_value(obj):
+    """Something a database returned that JSON has no type for, as text the grid and the exports can show.
+    A table with a binary, set or interval column must still open, whatever the column holds."""
+    if isinstance(obj, (bytes, bytearray, memoryview)):
+        return binary_text(obj)
+    if isinstance(obj, (set, frozenset)):
+        return sorted(obj, key=str)
+    if hasattr(obj, 'isoformat'):      # a time of day
+        return obj.isoformat()
+    return str(obj)
+
+
+JS_SAFE_INT = 2 ** 53 - 1   # the largest whole number a browser holds exactly
+
+
+def exact_ints(obj):
+    """A browser rounds integers beyond 2**53, which would show a wrong id and make a save look for a row that is not
+    there (or a different one). Such integers are sent as text; everything else is untouched."""
+    if isinstance(obj, int) and not isinstance(obj, bool):
+        return str(obj) if abs(obj) > JS_SAFE_INT else obj
+    if isinstance(obj, dict):
+        return {k: exact_ints(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [exact_ints(v) for v in obj]
+    return obj
+
+
 # Custom JSON encoder to handle datetime objects
 class CustomJSONProvider(DefaultJSONProvider):
+    def dumps(self, obj, **kwargs):
+        return super().dumps(exact_ints(obj), **kwargs)
+
     def default(self, obj):
         if isinstance(obj, datetime):
             return obj.strftime('%Y-%m-%d %H:%M:%S')
         elif isinstance(obj, date):
             return obj.strftime('%Y-%m-%d')
-        return super().default(obj)
+        try:
+            return super().default(obj)
+        except TypeError:
+            return plain_value(obj)
 
 
 __version__ = '1.0.0'
@@ -1598,15 +1632,20 @@ def import_csv():
 EXPORT_ROW_LIMIT = 100_000   # shortcut: built in memory, so a whole table is capped; stream to disk if bigger tables matter
 
 
-def _sql_literal(value) -> str:
+BINARY_LITERAL = {'mysql': "0x{}", 'sqlserver': "0x{}", 'sqlite': "X'{}'", 'postgresql': "'\\x{}'::bytea", 'oracle': "HEXTORAW('{}')"}
+
+
+def _sql_literal(value, kind=None) -> str:
     if value is None:
         return 'NULL'
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return BINARY_LITERAL.get(kind, "X'{}'").format(bytes(value).hex())
     if isinstance(value, bool):
         return '1' if value else '0'
     if isinstance(value, (int, float)):
         return str(value)
     if isinstance(value, (dict, list)):
-        value = json.dumps(value, default=str)
+        value = json.dumps(value, default=plain_value)
     return "'" + str(value).replace("'", "''") + "'"
 
 
@@ -1678,12 +1717,12 @@ def export_table():
         return row.get(col) if isinstance(row, dict) else row[i]
 
     if fmt == 'json':
-        body = json.dumps([{c: cell(r, i, c) for i, c in enumerate(columns)} for r in rows], indent=2, default=str)
+        body = json.dumps([{c: cell(r, i, c) for i, c in enumerate(columns)} for r in rows], indent=2, default=plain_value)
         mime = 'application/json'
     elif fmt == 'sql':
         target = connector.table_ref(table, database)
         names = ', '.join(connector.q(c) for c in columns)
-        body = ''.join(f"INSERT INTO {target} ({names}) VALUES ({', '.join(_sql_literal(cell(r, i, c)) for i, c in enumerate(columns))});\n"
+        body = ''.join(f"INSERT INTO {target} ({names}) VALUES ({', '.join(_sql_literal(cell(r, i, c), connector.db_type) for i, c in enumerate(columns))});\n"
                        for r in rows)
         mime = 'application/sql'
     else:
@@ -1692,7 +1731,7 @@ def export_table():
         writer = csv.writer(out, lineterminator='\n')
         writer.writerow(columns)
         for r in rows:
-            writer.writerow(['' if v is None else json.dumps(v, default=str) if isinstance(v, (dict, list)) else v
+            writer.writerow(['' if v is None else json.dumps(v, default=plain_value) if isinstance(v, (dict, list)) else plain_value(v) if isinstance(v, (bytes, bytearray, memoryview, set, frozenset)) else v
                              for v in (cell(r, i, c) for i, c in enumerate(columns))])
         body, mime = out.getvalue(), 'text/csv'
     response = Response(body, mimetype=mime)

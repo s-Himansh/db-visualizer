@@ -5,6 +5,22 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 
+BINARY_SHOWN_BYTES = 1024   # shortcut: a larger binary value is shown as its first 32 bytes and a size; upgrade for a hex viewer
+
+
+def binary_text(value) -> str:
+    """A binary value as the grid shows it. The stale-edit check and the JSON the grid reads must agree on this text."""
+    raw = bytes(value)
+    return '0x' + raw.hex() if len(raw) <= BINARY_SHOWN_BYTES else f'0x{raw[:32].hex()}… ({len(raw)} bytes)'
+
+
+def restore_big_ints(conditions):
+    """The grid hands back an integer beyond 2**53 as text (a browser cannot hold it). A database that compares types
+    strictly needs the number back; whole-number text that short is left alone."""
+    return {k: int(v) if isinstance(v, str) and re.fullmatch(r'-?\d{16,}', v) and abs(int(v)) > 2 ** 53 - 1 else v
+            for k, v in conditions.items()}
+
+
 def as_shown(value) -> str:
     """A value as the data grid displays it (and so as it is remembered when a cell is edited).
 
@@ -13,6 +29,8 @@ def as_shown(value) -> str:
     """
     if value is None:
         return ''
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return binary_text(value)
     if isinstance(value, bool):
         return 'true' if value else 'false'
     if isinstance(value, float):
@@ -331,6 +349,10 @@ class BaseConnector(ABC):
     def _lock_rows(self, table: str, conditions: Dict[str, Any], database: Optional[str]):
         """Lock the rows about to be checked and changed, so nobody can change them in between."""
 
+    def _coerce_conditions(self, conditions):
+        """Conditions as the database wants them. Most databases convert text to a number themselves."""
+        return conditions
+
     def _current_rows(self, table, conditions, database) -> List[dict]:
         """The rows that match `conditions` right now, as the grid would show them."""
         return self.get_table_data(table, database, limit=2, filters=dict(conditions))['rows']
@@ -387,6 +409,7 @@ class BaseConnector(ABC):
         """
         if not operations:
             return {'success': True, 'applied': 0, 'results': []}
+        operations = [{**op, 'conditions': self._coerce_conditions(op['conditions'])} if op.get('conditions') else op for op in operations]
 
         if dry_run and not self.SUPPORTS_TRANSACTIONS:
             return {'success': False, 'rolled_back': False, 'applied': 0, 'error': 'A check without saving needs a database that can roll back.'}

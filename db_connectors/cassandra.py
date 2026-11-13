@@ -9,7 +9,7 @@ from cassandra.query import SimpleStatement
 import ssl
 import time
 from typing import Any, Dict, List, Optional, Tuple
-from .base import BaseConnector
+from .base import BaseConnector, restore_big_ints
 
 
 class CassandraConnector(BaseConnector):
@@ -364,6 +364,9 @@ class CassandraConnector(BaseConnector):
         except Exception as e:
             logger.error(f"Error getting table data: {e}")
             raise
+
+    def _coerce_conditions(self, conditions):
+        return restore_big_ints(conditions)
 
     def insert_row(
         self,

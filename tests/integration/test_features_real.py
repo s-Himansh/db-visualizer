@@ -95,3 +95,26 @@ def test_sql_export_and_search_say_no_for_databases_that_are_not_sql(registered,
         pytest.skip('a SQL database')
     assert export(client, cid, b.db, 'people', 'sql').status_code == 400
     assert client.get('/api/search', query_string=dict(connection_id=cid, database=b.db, term='Alice')).status_code == 400
+
+
+def test_neighbouring_64_bit_ids_are_told_apart_when_editing(real):
+    client, cid, conn, schema, kind = real
+    q = conn.q
+    big = 'NUMBER(20)' if kind == 'oracle' else 'BIGINT'
+    conn.execute_query(f'DROP TABLE {q("zbig")}') if kind != 'oracle' else conn.execute_query('BEGIN EXECUTE IMMEDIATE \'DROP TABLE "zbig"\'; EXCEPTION WHEN OTHERS THEN NULL; END;')
+    made = conn.execute_query(f'CREATE TABLE {q("zbig")} ({q("id")} {big} PRIMARY KEY, {q("name")} VARCHAR(20))' if kind != 'oracle'
+                              else f'CREATE TABLE {q("zbig")} ({q("id")} NUMBER(20) PRIMARY KEY, {q("name")} VARCHAR2(20))')
+    assert not made.get('error'), made
+    try:
+        for n, i in enumerate((1234567890123456788, 1234567890123456789)):
+            conn.apply_batch('zbig', [{'op': 'insert', 'data': {'id': i, 'name': f'row{n}'}}], schema)
+        rows = client.get('/api/data', query_string=dict(connection_id=cid, database=schema, table='zbig')).get_json()['data']['rows']
+        assert sorted(str(r['id']) for r in rows) == ['1234567890123456788', '1234567890123456789']      # exact, not rounded
+        # the grid hands the id back as text; the right row must change, and only that one
+        r = client.post('/api/data/batch', json=dict(connection_id=cid, database=schema, table='zbig', operations=[
+            {'op': 'update', 'conditions': {'id': '1234567890123456789'}, 'data': {'name': 'edited'}, 'expected': {'name': 'row1'}}]))
+        assert r.status_code == 200 and r.get_json()['success'], (kind, r.get_json())
+        names = {str(x['id']): x['name'] for x in client.get('/api/data', query_string=dict(connection_id=cid, database=schema, table='zbig')).get_json()['data']['rows']}
+        assert names == {'1234567890123456788': 'row0', '1234567890123456789': 'edited'}, (kind, names)
+    finally:
+        conn.execute_query(f'DROP TABLE {q("zbig")}')
