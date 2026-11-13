@@ -1776,6 +1776,8 @@ if __name__ == '__main__':
     import webview
 
     atexit.register(shutdown)
+    # pywebview ignores file downloads unless told otherwise, which silently broke every Export button in the desktop app
+    webview.settings['ALLOW_DOWNLOADS'] = True
     webview.create_window(
         APP_NAME,
         app,

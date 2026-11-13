@@ -490,3 +490,8 @@ def test_search_with_no_match_or_too_short_a_term(client, conn_id, sqlite_path):
     assert search(client, conn_id, sqlite_path, 'zzzzqq').get_json()['results'] == []
     assert search(client, conn_id, sqlite_path, 'a').status_code == 400
     assert search(client, 'nope', sqlite_path, 'alpha').status_code == 400
+
+
+def test_desktop_window_allows_downloads():
+    # a window cannot run in CI; this guards the one setting without which every Export does nothing in the desktop app
+    assert "webview.settings['ALLOW_DOWNLOADS'] = True" in Path(db.__file__).read_text()
