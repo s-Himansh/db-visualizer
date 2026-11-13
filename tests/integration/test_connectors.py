@@ -65,16 +65,26 @@ def new_connector(b, **override):
     raise AssertionError(f'{b.id}: could not connect')
 
 
+def ensure_cassandra_keyspace(b):
+    """The keyspace must exist before a connection can use it. Any test file may be the first to run."""
+    if b.id == 'cassandra':
+        admin = b.cls({**b.params, 'database': None, 'keyspace': None})
+        for _ in range(3):
+            if admin.connect():
+                break
+            time.sleep(2)
+        else:
+            raise AssertionError('cassandra: could not connect')
+        admin.execute_query("CREATE KEYSPACE IF NOT EXISTS dbviz WITH replication = {'class':'SimpleStrategy','replication_factor':1}")
+        admin.disconnect()
+
+
 @pytest.fixture(scope='module', params=BACKENDS, ids=lambda b: b.id)
 def env(request):
     b = request.param
     if b.port and not reachable(b.port):
         pytest.skip(f'{b.id} server not running on {b.port}')
-    if b.id == 'cassandra':  # the keyspace must exist before a connection can use it
-        admin = b.cls({**b.params, 'database': None, 'keyspace': None})
-        assert admin.connect()
-        admin.execute_query("CREATE KEYSPACE IF NOT EXISTS dbviz WITH replication = {'class':'SimpleStrategy','replication_factor':1}")
-        admin.disconnect()
+    ensure_cassandra_keyspace(b)
     conn = new_connector(b)
     for stmt in b.ddl:
         r = conn.execute_query(stmt)

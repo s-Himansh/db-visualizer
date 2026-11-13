@@ -11,7 +11,7 @@ import pytest
 import db
 from conftest import HOST, reachable
 from db_connectors.redis import RedisConnector
-from test_connectors import BACKENDS, Backend, new_connector
+from test_connectors import BACKENDS, Backend, ensure_cassandra_keyspace, new_connector
 
 pytestmark = pytest.mark.integration
 ALL = BACKENDS + [Backend('redis', RedisConnector, 16379, {}, db='1')]
@@ -54,6 +54,7 @@ def live(request):
     if b.id == 'sqlite':     # a private in-memory database would vanish with the connection
         b.params = {**b.params, 'database': os.path.join(tempfile.mkdtemp(), 'drop.db')}
         b.db = b.params['database']
+    ensure_cassandra_keyspace(b)
     conn = new_connector(b)
     for stmt in b.ddl:
         assert not conn.execute_query(stmt).get('error'), stmt

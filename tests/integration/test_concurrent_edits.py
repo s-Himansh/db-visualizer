@@ -9,7 +9,7 @@ import pytest
 
 from conftest import reachable
 from db_connectors.redis import RedisConnector
-from test_connectors import BACKENDS, Backend, new_connector
+from test_connectors import BACKENDS, Backend, ensure_cassandra_keyspace, new_connector
 
 pytestmark = pytest.mark.integration
 ROUNDS = 25
@@ -24,6 +24,7 @@ def pair(request):
     if b.id == 'sqlite':
         b.params = {**b.params, 'database': os.path.join(tempfile.mkdtemp(), 'race.db')}
         b.db = b.params['database']
+    ensure_cassandra_keyspace(b)
     first = new_connector(b)
     for stmt in b.ddl:
         assert not first.execute_query(stmt).get('error'), stmt
