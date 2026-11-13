@@ -350,6 +350,7 @@ class TabManager {
                         <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="import-csv" title="Add rows to this table from a CSV file">Import CSV</button>
                         <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="export-table-csv">Export CSV</button>
                         <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="export-table-json">Export JSON</button>
+                        <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="export-table-sql" title="INSERT statements for the whole table">Export SQL</button>
                         <span class="results-info" id="table-info-${tab.id}">${this.escapeHtml(tab.state.tableName)}</span>
                         <span class="filter-chip" id="filter-chip-${tab.id}" style="display: none;"></span>
                         <div class="table-search-controls">
@@ -1896,6 +1897,9 @@ class TabManager {
                 case 'export-table-json':
                     this.exportTableData(tab, 'json');
                     break;
+                case 'export-table-sql':
+                    this.exportTableData(tab, 'sql');
+                    break;
             }
         });
 
@@ -2274,13 +2278,6 @@ class TabManager {
         const activeConn = window.app.connectionManager.getActiveConnection();
         if (!activeConn) return;
 
-        // Changing production data is never a single stray click
-        if (window.app.connectionManager.isProduction(activeConn.id)) {
-            const n = modifiedCells.length + newRows.length;
-            if (!(await ui.confirm(`Save ${n} change${n === 1 ? '' : 's'} to ${activeConn.name}? This is a production database.`,
-                    { title: 'Change production data', confirmLabel: 'Save to production', safeDefault: true }))) return;
-        }
-
         // Get primary key columns from schema
         let primaryKeys = [];
         try {
@@ -2313,6 +2310,11 @@ class TabManager {
         };
         const asValue = (v) => (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v;
         const operations = [];
+        const review = [];   // one plain-English line per change, shown before anything is sent
+        const shown = (v) => {
+            const t = v === null || v === undefined ? 'NULL' : typeof v === 'object' ? JSON.stringify(v) : String(v);
+            return t.length > 40 ? t.slice(0, 40) + '…' : t;
+        };
 
         for (const newRow of newRows) {
             const data = {};
@@ -2320,6 +2322,7 @@ class TabManager {
                 data[cell.getAttribute('data-column')] = cellValue(cell);
             });
             operations.push({ op: 'insert', data });
+            review.push('+ new row: ' + Object.entries(data).filter(([, v]) => v !== null).slice(0, 3).map(([k, v]) => `${k} = ${shown(v)}`).join(', '));
         }
 
         const modifiedRows = {};
@@ -2349,7 +2352,16 @@ class TabManager {
                 if (!cell.querySelector('.json-view-icon, .json-cell')) expected[col] = cell.getAttribute('data-original-value');
             });
             operations.push({ op: 'update', conditions, data, expected });
+            const who = Object.entries(conditions).slice(0, 2).map(([k, v]) => `${k} ${shown(v)}`).join(', ');
+            review.push(`${who}: ` + Object.keys(data).map(col => `${col} ${shown(originalRow[col])} → ${shown(data[col])}`).join('; '));
         }
+
+        // Nothing is sent until the user has seen exactly what will change. Production says so loudly.
+        const n = operations.length;
+        const prod = window.app.connectionManager.isProduction(activeConn.id);
+        const lines = review.slice(0, 12).join('\n') + (review.length > 12 ? `\n…and ${review.length - 12} more` : '');
+        if (!(await ui.confirm(`${prod ? `This is a production database (${activeConn.name}).\n\n` : ''}${lines}`,
+                { title: prod ? 'Change production data' : 'Review changes', confirmLabel: prod ? 'Save to production' : `Save ${n} change${n === 1 ? '' : 's'}`, safeDefault: prod }))) return;
 
         const done = await this.sendBatch(tab, activeConn, operations);
         if (!done) return;
@@ -2712,85 +2724,24 @@ class TabManager {
      * @param {object} tab - Tab object (table type)
      * @param {string} format - 'csv' or 'json'
      */
-    exportTableData(tab, format) {
-        // Get the currently displayed table data
-        const tableGrid = document.getElementById(`table-data-grid-${tab.id}`);
-        if (!tableGrid) {
-            ui.notify('No table data to export');
-            return;
-        }
-
-        // Extract data from the displayed table
-        const table = tableGrid.querySelector('table');
-        if (!table) {
-            ui.notify('No table data to export');
-            return;
-        }
-
-        // Get column names from table headers
-        const headerRow = table.querySelector('thead tr');
-        if (!headerRow) {
-            ui.notify('No table headers found');
-            return;
-        }
-
-        const columns = Array.from(headerRow.querySelectorAll('th'))
-            .map(th => th.textContent.trim())
-            .filter(col => col && col !== ''); // Remove empty columns (like checkbox column)
-
-        // Get data rows
-        const dataRows = table.querySelectorAll('tbody tr');
-        if (!dataRows || dataRows.length === 0) {
-            ui.notify('No data rows to export');
-            return;
-        }
-
-        // Convert DOM rows to data objects
-        const rows = [];
-        dataRows.forEach(tr => {
-            const cells = tr.querySelectorAll('td');
-            const rowData = {};
-
-            let colIndex = 0;
-            cells.forEach((cell, cellIndex) => {
-                // Skip checkbox cells
-                if (cell.querySelector('input[type="checkbox"]')) {
-                    return;
-                }
-
-                if (colIndex < columns.length) {
-                    const colName = columns[colIndex];
-
-                    // Check if this cell has JSON data in jsonDataStore
-                    const jsonIcon = cell.querySelector('.json-view-icon');
-                    if (jsonIcon) {
-                        const jsonId = jsonIcon.getAttribute('data-json-id');
-                        if (jsonId && this.jsonDataStore.has(jsonId)) {
-                            const jsonData = this.jsonDataStore.get(jsonId);
-                            rowData[colName] = jsonData; // Export as object/string
-                        } else {
-                            rowData[colName] = cell.textContent.trim();
-                        }
-                    } else {
-                        const cellValue = cell.textContent.trim();
-                        rowData[colName] = cellValue === 'NULL' ? null : cellValue;
-                    }
-
-                    colIndex++;
-                }
-            });
-
-            rows.push(rowData);
-        });
-
-        const rowCount = rows.length;
-        const tableName = tab.state.tableName || 'table-data';
-        const filename = `${tableName}_${rowCount}`;
-
-        if (format === 'csv') {
-            this.exportToCSV(rows, columns, filename);
-        } else if (format === 'json') {
-            this.exportToJSON(rows, filename);
+    async exportTableData(tab, format) {
+        const conn = window.app.connectionManager.getActiveConnection();
+        if (!conn) return;
+        try {
+            const response = await fetch(`/api/export?connection_id=${conn.id}&database=${encodeURIComponent(tab.state.database || '')}` +
+                `&table=${encodeURIComponent(tab.state.tableName)}&format=${format}`);
+            if (!response.ok) {
+                const problem = await response.json().catch(() => ({}));
+                ui.notify(problem.error || 'Could not export this table', 'error');
+                return;
+            }
+            const rows = response.headers.get('X-Export-Rows');
+            const text = await response.text();
+            const mime = { csv: 'text/csv', json: 'application/json', sql: 'application/sql' }[format];
+            this.downloadFile(text, `${tab.state.tableName}_${rows}.${format}`, mime);
+            if (response.headers.get('X-Export-Truncated') === 'true') ui.notify(`Exported the first ${rows} rows; this table has more.`);
+        } catch (error) {
+            ui.notify(`Could not export: ${error.message}`, 'error');
         }
     }
 

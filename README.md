@@ -126,7 +126,7 @@ Many databases have no foreign keys at all, so most tools can't draw or follow a
 </tr>
 </table>
 
-Also in the box: SSH tunnels, read-only connections, a query editor with autocomplete, a data grid with search, sorting and paging, a schema viewer, CSV/JSON export, query history, and **light and dark themes**: the button in the top bar cycles *System* (follows your computer), *Light* and *Dark*, and your choice is remembered.
+Also in the box: SSH tunnels, read-only connections, a query editor with autocomplete, a data grid with search, sorting and paging, a schema viewer, CSV/JSON/SQL export of a whole table, a review of every change before it is saved, query history, and **light and dark themes**: the button in the top bar cycles *System* (follows your computer), *Light* and *Dark*, and your choice is remembered.
 
 ---
 

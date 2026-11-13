@@ -447,3 +447,28 @@ def test_saving_several_connections_at_once_keeps_them_all(client):
     assert len(set(ids)) == 12 and sorted(c['name'] for c in saved) == sorted(f'n{i}' for i in range(12))
     for connection_id in ids:
         client.delete(f'/api/connections/{connection_id}')
+
+
+# --- export -----------------------------------------------------------------------------------------------------
+
+def export(client, cid, path, fmt):
+    return client.get('/api/export', query_string=dict(connection_id=cid, table='t', database=path, format=fmt))
+
+
+def test_export_sql_quotes_names_and_values(client, conn_id, sqlite_path):
+    r = export(client, conn_id, sqlite_path, 'sql')
+    assert r.status_code == 200 and r.headers['X-Export-Rows'] == '3'
+    text = r.get_data(as_text=True)
+    q = db.SQLiteConnector.q
+    assert f"INSERT INTO {q('t')} ({q('id')}, {q('name')}, {q('v')}) VALUES (3, 'O''Brien', 3.0);" in text
+    assert 'attachment; filename="t.sql"' == r.headers['Content-Disposition']
+
+
+def test_export_csv_and_json_cover_every_row(client, conn_id, sqlite_path):
+    assert export(client, conn_id, sqlite_path, 'csv').get_data(as_text=True).splitlines() == ['id,name,v', '1,alpha,1.0', '2,beta,2.0', "3,O'Brien,3.0"]
+    assert [row['name'] for row in json.loads(export(client, conn_id, sqlite_path, 'json').get_data(as_text=True))] == ['alpha', 'beta', "O'Brien"]
+
+
+def test_export_rejects_unknown_format_and_missing_connection(client, conn_id, sqlite_path):
+    assert export(client, conn_id, sqlite_path, 'xml').status_code == 400
+    assert export(client, 'nope', sqlite_path, 'csv').status_code == 400
