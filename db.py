@@ -1552,6 +1552,75 @@ def import_csv():
                     'rolled_back': result.get('rolled_back', True)}), 422
 
 
+EXPORT_ROW_LIMIT = 100_000   # shortcut: built in memory, so a whole table is capped; stream to disk if bigger tables matter
+
+
+def _sql_literal(value) -> str:
+    if value is None:
+        return 'NULL'
+    if isinstance(value, bool):
+        return '1' if value else '0'
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, (dict, list)):
+        value = json.dumps(value, default=str)
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+@app.route('/api/export', methods=['GET'])
+def export_table():
+    """The whole table (not just the page on screen) as a csv, json or SQL INSERT file."""
+    connection_id, table, database = request.args.get('connection_id'), request.args.get('table'), request.args.get('database')
+    fmt = request.args.get('format', 'csv')
+    if not connection_id or not table or fmt not in ('csv', 'json', 'sql'):
+        return jsonify({'success': False, 'error': 'Connection, table and a format of csv, json or sql are required'}), 400
+    connector = get_connector(connection_id)
+    if not connector:
+        return jsonify({'success': False, 'error': 'Not connected'}), 400
+    if fmt == 'sql' and connector.db_type not in SQL_TYPES:
+        return jsonify({'success': False, 'error': 'SQL export is only available for SQL databases'}), 400
+    try:
+        columns, rows = [], []
+        while len(rows) < EXPORT_ROW_LIMIT:
+            page = connector.get_table_data(table=table, database=database, limit=MAX_PAGE_SIZE, offset=len(rows))
+            columns = page['columns']
+            rows += page['rows']
+            if len(page['rows']) < MAX_PAGE_SIZE:
+                break
+    except Exception as e:
+        return error_response(e)
+    truncated = len(rows) >= EXPORT_ROW_LIMIT
+    rows = rows[:EXPORT_ROW_LIMIT]
+
+    def cell(row, i, col):
+        return row.get(col) if isinstance(row, dict) else row[i]
+
+    if fmt == 'json':
+        body = json.dumps([{c: cell(r, i, c) for i, c in enumerate(columns)} for r in rows], indent=2, default=str)
+        mime = 'application/json'
+    elif fmt == 'sql':
+        target = connector.table_ref(table, database)
+        names = ', '.join(connector.q(c) for c in columns)
+        body = ''.join(f"INSERT INTO {target} ({names}) VALUES ({', '.join(_sql_literal(cell(r, i, c)) for i, c in enumerate(columns))});\n"
+                       for r in rows)
+        mime = 'application/sql'
+    else:
+        import csv, io
+        out = io.StringIO()
+        writer = csv.writer(out, lineterminator='\n')
+        writer.writerow(columns)
+        for r in rows:
+            writer.writerow(['' if v is None else json.dumps(v, default=str) if isinstance(v, (dict, list)) else v
+                             for v in (cell(r, i, c) for i, c in enumerate(columns))])
+        body, mime = out.getvalue(), 'text/csv'
+    response = Response(body, mimetype=mime)
+    safe_name = ''.join(ch if ch.isalnum() or ch in '_-' else '_' for ch in table)
+    response.headers['Content-Disposition'] = f'attachment; filename="{safe_name}.{fmt}"'
+    response.headers['X-Export-Rows'] = str(len(rows))
+    response.headers['X-Export-Truncated'] = 'true' if truncated else 'false'
+    return response
+
+
 @app.route('/api/data/batch', methods=['POST'])
 def batch_data():
     """Save several inserts, updates and deletes as one unit (all or nothing where the database allows it)."""

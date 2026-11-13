@@ -7,6 +7,11 @@ import pytest
 
 from conftest import dialogs
 
+
+def conflicts(page):
+    """Conflict questions only: the review before every save is expected."""
+    return [d for d in dialogs(page) if 'changed by someone else' in d]
+
 pytestmark = pytest.mark.e2e
 
 SQL = {
@@ -98,7 +103,7 @@ def test_editing_every_kind_of_column_never_raises_a_false_conflict(real):
     edit(page, 0, 'note', 'changed') if kind != 'oracle' else None
     page.click('.tab-content.active [data-action=save-changes]')
     saved(page, 1)                                  # one row changed (the toast counts rows, not cells)
-    assert dialogs(page) == [], f'a false conflict was reported: {dialogs(page)}'
+    assert not conflicts(page), f'a false conflict was reported: {conflicts(page)}'
     assert value(admin, spec, 'name') == 'alpha 2'
     assert float(value(admin, spec, 'price')) == 99.99 and float(value(admin, spec, 'score')) == 2.5
 
@@ -111,7 +116,7 @@ def test_editing_a_date_and_a_timestamp_column(real):
     edit(page, 0, 'seen', '2026-05-06 07:08:09')
     page.click('.tab-content.active [data-action=save-changes]')
     saved(page, 1)
-    assert dialogs(page) == []
+    assert not conflicts(page)
     assert str(value(admin, spec, 'born'))[:10] == '2026-05-06' and '2026-05-06 07:08:09' in str(value(admin, spec, 'seen'))
 
 
@@ -121,7 +126,7 @@ def test_a_boolean_or_flag_column_and_a_null_cell(real):
     edit(page, 1, 'note', 'was null') if kind != 'oracle' else edit(page, 1, 'note', 'was null')
     page.click('.tab-content.active [data-action=save-changes]')
     saved(page, 1)
-    assert dialogs(page) == [], f'a false conflict was reported: {dialogs(page)}'
+    assert not conflicts(page), f'a false conflict was reported: {conflicts(page)}'
 
 
 def test_a_real_conflict_is_still_caught_on_each_database(real):
@@ -129,8 +134,8 @@ def test_a_real_conflict_is_still_caught_on_each_database(real):
     q = admin.q
     edit(page, 0, 'name', 'mine')
     admin.execute_query(f"UPDATE {q('ui_edit')} SET {q('name')} = 'theirs' WHERE {q('id')} = 1")
-    page.evaluate("window.__dialogAnswer = false")
+    page.evaluate("window.__dialogAnswer = [true, false]")   # accept the review, decline the conflict
     page.click('.tab-content.active [data-action=save-changes]')
-    page.wait_for_function("window.__dialogs.length >= 1")
+    page.wait_for_function("window.__dialogs.length >= 2")
     assert 'name was "alpha" when you loaded it, now "theirs"' in dialogs(page)[-1]
     assert value(admin, spec, 'name') == 'theirs'

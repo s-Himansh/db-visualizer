@@ -91,9 +91,9 @@ def test_a_row_changed_by_someone_else_is_shown_and_you_can_keep_editing(connect
     original = db(connected, 'select name from customers where id = 1')[0][0]
     edit(connected, 0, 'name', 'My version')
     db(connected, "update customers set name = 'Their version' where id = 1")      # changed behind your back
-    answer_dialogs(connected, False)                                               # "Keep editing"
+    answer_dialogs(connected, [True, False])                                       # accept the review, then "Keep editing"
     save(connected)
-    connected.wait_for_function("window.__dialogs.length >= 1")
+    connected.wait_for_function("window.__dialogs.length >= 2")
     text = dialogs(connected)[-1]
     assert 'changed by someone else' in text and 'Nothing has been saved' in text
     assert f'name was "{original}" when you loaded it, now "Their version"' in text and 'id = 1' in text
@@ -105,7 +105,7 @@ def test_you_can_choose_to_save_over_it(connected):
     open_table(connected, 'customers')
     edit(connected, 0, 'name', 'My version')
     db(connected, "update customers set name = 'Their version' where id = 1")
-    answer_dialogs(connected, True)                                                # "Save anyway"
+    answer_dialogs(connected, [True, True])                                        # accept the review, then "Save anyway"
     save(connected)
     connected.wait_for_function("document.querySelector('#toast-stack') && document.querySelector('#toast-stack').innerText.includes('Saved 1 change')")
     assert db(connected, 'select name from customers where id = 1') == [('My version',)]
@@ -117,9 +117,9 @@ def test_every_conflicting_row_is_listed_at_once(connected):
     edit(connected, 1, 'name', 'Mine 2')
     db(connected, "update customers set name = 'Theirs 1' where id = 1")
     db(connected, "update customers set name = 'Theirs 2' where id = 2")
-    answer_dialogs(connected, False)
+    answer_dialogs(connected, [True, False])
     save(connected)
-    connected.wait_for_function("window.__dialogs.length >= 1")
+    connected.wait_for_function("window.__dialogs.length >= 2")
     text = dialogs(connected)[-1]
     assert '2 rows were changed' in text and 'Theirs 1' in text and 'Theirs 2' in text
 
@@ -128,9 +128,9 @@ def test_editing_a_row_that_was_deleted_says_so(connected):
     open_table(connected, 'customers')
     edit(connected, 0, 'name', 'Mine')
     db(connected, 'delete from customers where id = 1')
-    answer_dialogs(connected, False)
+    answer_dialogs(connected, [True, False])
     save(connected)
-    connected.wait_for_function("window.__dialogs.length >= 1")
+    connected.wait_for_function("window.__dialogs.length >= 2")
     assert 'no longer exists' in dialogs(connected)[-1]
 
 
@@ -140,7 +140,7 @@ def test_unchanged_rows_cause_no_dialog_even_after_other_rows_change(connected):
     db(connected, "update customers set name = 'Elsewhere' where id = 5")          # a different row
     save(connected)
     connected.wait_for_function("document.querySelector('#toast-stack') && document.querySelector('#toast-stack').innerText.includes('Saved 1 change')")
-    assert dialogs(connected) == []
+    assert not any('changed by someone else' in d for d in dialogs(connected))   # only the review was shown
 
 
 # ---- the silent failure this replaces ----------------------------------------------------------------------------------
@@ -290,3 +290,34 @@ def test_finalizing_a_json_edit_stages_it_and_the_table_save_writes_it(connected
     toast_with(connected, 'Saved 1 change')
     name, meta = db(connected, 'select name, meta from customers where id = ?', row + 1)[0]
     assert name == 'Staged too' and json.loads(meta) == {'tier': 'staged'}
+
+
+# ---- review before saving ---------------------------------------------------------------------------------------
+
+def test_saving_shows_each_change_first_and_cancel_saves_nothing(connected):
+    from conftest import manual_dialogs
+    open_table(connected, 'customers')
+    before = db(connected, 'select name from customers where id = 1')[0][0]
+    edit(connected, 0, 'name', 'Reviewed')
+    manual_dialogs(connected)
+    save(connected)
+    connected.wait_for_selector('.app-dialog')
+    text = connected.inner_text('.app-dialog')
+    assert 'Review changes' in text and f'name {before} → Reviewed' in text
+    connected.click('.app-dialog button:has-text("Cancel")')
+    connected.wait_for_selector('.app-dialog', state='detached')
+    assert db(connected, 'select name from customers where id = 1')[0][0] == before
+    assert connected.locator('.tab-content.active td.modified').count() == 1   # your edit is still there
+    connected.click('.tab-content.active [data-action=save-changes]')
+    connected.click('.app-dialog button:has-text("Save 1 change")')
+    toast_with(connected, 'Saved 1 change')
+    assert db(connected, 'select name from customers where id = 1') == [('Reviewed',)]
+
+
+def test_export_sql_downloads_the_whole_table(connected):
+    open_table(connected, 'customers')
+    with connected.expect_download(timeout=5000) as dl:
+        connected.click('.tab-content.active [data-action=export-table-sql]')
+    assert dl.value.suggested_filename.endswith('.sql')
+    text = open(dl.value.path()).read()
+    assert text.count('INSERT INTO') == db(connected, 'select count(*) from customers')[0][0]

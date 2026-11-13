@@ -23,7 +23,9 @@ new MutationObserver(() => {
   d.dataset.seen = '1';
   window.__dialogs.push(d.querySelector('.app-dialog-message').textContent);
   if (window.__dialogAnswer === 'manual') return;   // the test answers it itself
-  setTimeout(() => d.querySelector(window.__dialogAnswer ? '[data-answer=ok]' : '[data-answer=cancel]').click(), 30);
+  let answer = window.__dialogAnswer;
+  if (Array.isArray(answer)) answer = answer.length ? answer.shift() : true;   // one answer per dialog, in order
+  setTimeout(() => d.querySelector(answer ? '[data-answer=ok]' : '[data-answer=cancel]').click(), 30);
 }).observe(document, {childList: true, subtree: true});
 """
 
@@ -144,7 +146,8 @@ def open_query_tab(pg):
 
 
 def answer_dialogs(pg, accept):
-    pg.evaluate(f'window.__dialogAnswer = {"true" if accept else "false"}')
+    """accept is True/False for every dialog, or a list with one answer per dialog in order (then True)."""
+    pg.evaluate('a => { window.__dialogAnswer = a }', accept)
 
 
 def manual_dialogs(pg):
