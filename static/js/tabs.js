@@ -384,6 +384,7 @@ class TabManager {
                         <button class="btn btn-sm" data-map="fit" title="Fit the whole map in view">Fit</button>
                         <button class="btn btn-sm" data-map="zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
                         <button class="btn btn-sm" data-map="zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
+                        <label class="map-toggle" title="Show every column, with primary keys, instead of only the ones that take part in a relationship"><input type="checkbox" data-map="all-columns"> All columns</label>
                         <button class="btn btn-sm" data-map="refresh" title="Read the relationships again">Refresh</button>
                         <button class="btn btn-sm" data-map="find" title="Look for relationships this database never declared, using column names and the data">Find missing relationships</button>
                         <span class="results-info map-info"></span>
