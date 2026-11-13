@@ -2,6 +2,8 @@
 
 If a connector cannot do something by design (Cassandra has no LIKE), declare it in the backend's
 `unsupported` set with the reason, so the gap is documented and visible rather than silently untested."""
+import time
+
 import pytest
 
 from conftest import HOST, reachable
@@ -54,9 +56,13 @@ BACKENDS = [
 
 
 def new_connector(b, **override):
-    c = b.cls({**b.params, **override})
-    assert c.connect(), f'{b.id}: could not connect'
-    return c
+    # a busy server (Cassandra on a CI runner) can refuse the odd connection attempt; a real outage fails all three
+    for attempt in range(3):
+        c = b.cls({**b.params, **override})
+        if c.connect():
+            return c
+        time.sleep(2)
+    raise AssertionError(f'{b.id}: could not connect')
 
 
 @pytest.fixture(scope='module', params=BACKENDS, ids=lambda b: b.id)

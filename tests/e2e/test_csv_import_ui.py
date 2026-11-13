@@ -24,11 +24,11 @@ def open_table(pg, name, rows=True):
 
 
 def pick(pg, tmp_path, text, name='data.csv'):
-    path = tmp_path / name
-    path.write_bytes(text if isinstance(text, bytes) else text.encode('utf-8'))
+    # an in-memory file: the name can be anything the browser allows, including characters Windows forbids on disk
+    payload = {'name': name, 'mimeType': 'text/csv', 'buffer': text if isinstance(text, bytes) else text.encode('utf-8')}
     with pg.expect_file_chooser() as chooser:
         pg.click('.tab-content.active [data-action=import-csv]')
-    chooser.value.set_files(str(path))
+    chooser.value.set_files(payload)
 
 
 def opened(pg, tmp_path, text, name='data.csv', table='customers'):
