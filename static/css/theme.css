@@ -696,6 +696,8 @@ select.form-control, .table-search-columns, .database-selector {
 .map-node-title { fill: var(--text-strong); font: 600 13px var(--font-ui); pointer-events: none; }
 .map-col { font: 12px var(--font-data); fill: var(--text); pointer-events: none; }
 .map-col.is-fk { fill: var(--accent-strong); }
+.map-col.is-pk { font-weight: 700; }
+.map-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
 .map-col-tag { font: 10px var(--font-ui); fill: var(--faint); pointer-events: none; }
 .map-edge { fill: none; stroke: var(--faint); stroke-width: 1.4; transition: stroke 0.12s, opacity 0.12s; }
 .map-arrow { fill: var(--faint); }

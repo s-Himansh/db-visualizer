@@ -337,3 +337,15 @@ def test_long_text_still_gets_room_and_short_columns_stay_narrow(connected):
     widths = connected.evaluate("""() => Object.fromEntries([...document.querySelectorAll('.tab-content.active thead th[data-col]')]
         .map(th => [th.dataset.col, th.getBoundingClientRect().width]))""")
     assert widths['id'] < 110 and widths['email'] > 1.4 * widths['id']
+
+
+def test_all_columns_shows_every_column_and_primary_keys(map_open):
+    keys_only = node(map_open, 'customers').locator('.map-col').count()
+    map_open.check('.tab-content.active [data-map=all-columns]')
+    map_open.wait_for_function("n => document.querySelectorAll('.tab-content.active .map-node[data-table=customers] .map-col').length > n", arg=keys_only)
+    cols = node(map_open, 'customers').locator('.map-col').evaluate_all('els => els.map(e => e.childNodes[0].textContent)')
+    assert {'id', 'name', 'email', 'country'} <= set(cols)
+    assert 'PK' in node(map_open, 'customers').locator('.map-col-tag').evaluate_all('els => els.map(e => e.textContent)')
+    assert map_open.locator('.tab-content.active .map-edge').count() == 3          # the arrows still land on the right rows
+    map_open.uncheck('.tab-content.active [data-map=all-columns]')
+    map_open.wait_for_function("n => document.querySelectorAll('.tab-content.active .map-node[data-table=customers] .map-col').length === n", arg=keys_only)

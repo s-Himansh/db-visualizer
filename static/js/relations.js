@@ -146,7 +146,7 @@ class RelationsManager {
     static GAP_Y = 26;
 
     // Parents (referenced tables) on the left, children on the right; order within a column reduces crossings
-    static layout(relations) {
+    static layout(relations, columns = null) {
         const nodes = new Map();
         const node = (name) => {
             if (!nodes.has(name)) nodes.set(name, { name, rows: new Map(), parents: new Set(), children: new Set() });
@@ -157,6 +157,16 @@ class RelationsManager {
             child.rows.set(r.column, { ...(child.rows.get(r.column) || {}), fk: true });
             parent.rows.set(r.referenced_column, { ...(parent.rows.get(r.referenced_column) || {}), ref: true });
             if (r.table !== r.referenced_table) { child.parents.add(r.referenced_table); parent.children.add(r.table); }
+        }
+
+        // "All columns": every column in table order, keeping the FK / ref marks found above
+        if (columns) {
+            for (const n of nodes.values()) {
+                const known = n.rows;
+                n.rows = new Map();
+                for (const c of columns.get(n.name) || []) n.rows.set(c.name, { ...(known.get(c.name) || {}), pk: c.primary_key, type: c.type });
+                for (const [name, role] of known) if (!n.rows.has(name)) n.rows.set(name, role);   // a column the schema did not list
+            }
         }
 
         // layer = 1 + the deepest parent; a cycle is cut where it closes
@@ -265,9 +275,28 @@ class RelationsManager {
         findButton.onclick = () => window.app.relationshipFinder.toggle(tab);
         findButton.disabled = !['sqlite', 'mysql', 'postgresql', 'sqlserver', 'oracle'].includes(
             (window.app.connectionManager.connections.find(c => c.id === tab.connectionId) || {}).type);
-        root.querySelector('[data-map=refresh]').onclick = () => this.renderMap(tab);
+        root.querySelector('[data-map=refresh]').onclick = () => { tab.mapSchemas = null; this.renderMap(tab); };
+        const allColumns = root.querySelector('[data-map=all-columns]');
+        allColumns.checked = !!tab.mapAllColumns;
+        allColumns.onchange = () => { tab.mapAllColumns = allColumns.checked; this.renderMap(tab); };
 
-        const { nodes, width, height } = RelationsManager.layout(data.relations);
+        let columns = null;
+        if (tab.mapAllColumns) {
+            const tables = [...new Set(data.relations.flatMap(r => [r.table, r.referenced_table]))];
+            tab.mapSchemas = tab.mapSchemas || new Map();
+            try {
+                await Promise.all(tables.filter(t => !tab.mapSchemas.has(t)).map(async (t) => {
+                    const body = await (await fetch(`/api/schema?connection_id=${tab.connectionId}&database=${encodeURIComponent(tab.state.database)}&table=${encodeURIComponent(t)}`)).json();
+                    if (!body.success) throw new Error(body.error || `Could not read ${t}`);
+                    tab.mapSchemas.set(t, body.schema.columns);
+                }));
+                columns = tab.mapSchemas;
+            } catch (err) {
+                ui.notify(`Showing key columns only: ${err.message}`, 'error');
+            }
+        }
+
+        const { nodes, width, height } = RelationsManager.layout(data.relations, columns);
         const NS = 'http://www.w3.org/2000/svg';
         const el = (name, attrs = {}, parent) => {
             const e = document.createElementNS(NS, name);
@@ -345,10 +374,11 @@ class RelationsManager {
             el('title', {}, g).textContent = n.name;
             [...n.rows.entries()].forEach(([col, role], i) => {
                 const y = R.HEAD_H + i * R.ROW_H + R.ROW_H / 2 + 4;
-                const t = el('text', { class: `map-col ${role.fk ? 'is-fk' : 'is-ref'}`, x: 12, y }, g);
+                const t = el('text', { class: `map-col ${role.fk ? 'is-fk' : ''}${role.pk ? ' is-pk' : ''}`, x: 12, y }, g);
                 t.textContent = col.length > 20 ? col.slice(0, 19) + '…' : col;
+                if (role.type) el('title', {}, t).textContent = `${col} (${role.type})`;
                 const tag = el('text', { class: 'map-col-tag', x: R.NODE_W - 12, y, 'text-anchor': 'end' }, g);
-                tag.textContent = role.fk ? 'FK' : 'ref';
+                tag.textContent = [role.pk ? 'PK' : '', role.fk ? 'FK' : role.ref && !role.pk ? 'ref' : ''].filter(Boolean).join(' ');
             });
             const open = () => window.app.openTableData(tab.connectionId, tab.state.database, n.name);
             g.addEventListener('click', (e) => { if (!svg.dataset.dragged) open(); });
