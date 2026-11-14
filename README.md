@@ -128,6 +128,8 @@ Many databases have no foreign keys at all, so most tools can't draw or follow a
 
 Saved connections show as a searchable grid, grouped by Open now, Production, Staging, Development and Local, so a long list is all on screen at once (press `/` to search, arrow keys and Enter to connect).
 
+The interface uses three bundled typefaces, so nothing is fetched from the internet: Bricolage Grotesque for titles, Instrument Sans for the interface and Geist Mono for data. All three are SIL Open Font License; the licences are in `static/fonts/`.
+
 Also in the box: SSH tunnels, read-only connections, a query editor with autocomplete, a data grid with search, sorting and paging, a schema viewer, CSV/JSON/SQL export of a whole table, a review of every change before it is saved, search for a value across every table (Cmd/Ctrl+Shift+F), query history, and **light and dark themes**: the button in the top bar cycles *System* (follows your computer), *Light* and *Dark*, and your choice is remembered.
 
 ---
