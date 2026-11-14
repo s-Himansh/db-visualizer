@@ -352,7 +352,7 @@ class QueryEditor {
                     return '';
                 }
                 // Handle objects by converting to JSON
-                const strValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
+                const strValue = spreadsheetSafe(typeof value === 'object' ? JSON.stringify(value) : String(value));
                 return `"${strValue.replace(/"/g, '""')}"`;
             });
             csv += values.join(',') + '\n';

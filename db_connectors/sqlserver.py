@@ -19,6 +19,7 @@ def serialize_value(value):
 
 
 class SQLServerConnector(BaseConnector):
+    LIKE_SPECIAL = '\\%_['            # [ opens a character class in a SQL Server LIKE
     """SQL Server database connector implementation."""
 
     IDENT_QUOTE = ('[', ']')
@@ -351,8 +352,8 @@ class SQLServerConnector(BaseConnector):
                     conditions.append(f"{self.q(col)} = %s")
                     values.append(val)
             if term:
-                conditions.append("(" + " OR ".join(f"CAST({self.q(c)} AS NVARCHAR(MAX)) LIKE %s" for c in search_cols) + ")")
-                values += [f'%{term}%'] * len(search_cols)
+                conditions.append("(" + " OR ".join(f"CAST({self.q(c)} AS NVARCHAR(MAX)) LIKE %s{self.LIKE_ESCAPE}" for c in search_cols) + ")")
+                values += [self.like_pattern(term)] * len(search_cols)
             where = " WHERE " + " AND ".join(conditions) if conditions else ""
 
             query = f"SELECT * FROM {self.q(table)}{where}"

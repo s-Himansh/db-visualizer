@@ -348,7 +348,7 @@ class TabManager {
                         <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="undo-edit" style="display: none;" title="Undo your last edit (Cmd/Ctrl+Z)">Undo</button>
                         <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="discard-changes" style="display: none;">Discard</button>
                         <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="import-csv" title="Add rows to this table from a CSV file">Import CSV</button>
-                        <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="export-table-csv">Export CSV</button>
+                        <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="export-table-csv" title="CSV for spreadsheets: text cells starting with = + - or @ get a leading ' so Excel does not run them. Use Export JSON or SQL for exact values.">Export CSV</button>
                         <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="export-table-json">Export JSON</button>
                         ${window.app.connectionManager.isSql(tab.connectionId) ? `<button class="btn btn-sm" data-tab-id="${tab.id}" data-action="export-table-sql" title="INSERT statements for the whole table">Export SQL</button>` : ''}
                         <span class="results-info" id="table-info-${tab.id}">${this.escapeHtml(tab.state.tableName)}</span>
@@ -2810,6 +2810,7 @@ class TabManager {
         if (value === null || value === undefined) {
             return '';
         }
+        value = spreadsheetSafe(value);
         const str = String(value);
         // Escape quotes and wrap in quotes if contains comma, quote, or newline
         if (str.includes(',') || str.includes('"') || str.includes('\n')) {
