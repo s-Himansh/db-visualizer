@@ -272,6 +272,7 @@ class DatabaseVisualizer {
         if (hasTabs) return;
 
         const conns = this.connectionManager.connections || [];
+        welcome.classList.toggle('welcome-wide', conns.length > 0);   // the picker uses the whole width
         if (conns.length === 0) {
             welcome.innerHTML = `
                 <h2>Connect your first database</h2>
@@ -286,20 +287,15 @@ class DatabaseVisualizer {
         } else {
             welcome.innerHTML = `
                 <h2>Pick a database to open</h2>
-                <p>Your saved connections. Connecting loads its tables in the sidebar.</p>
-                <div class="welcome-list">${conns.map(c => `
-                    <button class="welcome-conn" data-id="${escapeHtml(c.id)}">
-                        <span class="welcome-conn-name">${escapeHtml(c.name)}</span>
-                        <span class="connection-type">${escapeHtml(c.type)}</span>
-                    </button>`).join('')}</div>
+                <p>Your saved connections. Click one to connect and load its tables in the sidebar. Press <kbd>/</kbd> to search.</p>
+                <div id="welcome-picker"></div>
                 <div class="welcome-actions">
                     <button class="btn" id="welcome-new">Add a connection</button>
                     ${conns.some(c => c.sample) ? '' : '<button class="btn" id="welcome-sample">Try a sample database</button>'}
                 </div>`;
+            this.connectionManager.renderGrid(welcome.querySelector('#welcome-picker'), 'welcome');
             const sample = welcome.querySelector('#welcome-sample');
             if (sample) sample.addEventListener('click', () => this.openSample());
-            welcome.querySelectorAll('.welcome-conn').forEach(b =>
-                b.addEventListener('click', () => this.connectionManager.connect(b.dataset.id)));
             welcome.querySelector('#welcome-new').addEventListener('click', () => this.connectionManager.showConnectionModal());
         }
     }

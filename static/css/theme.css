@@ -554,24 +554,6 @@ input[type="checkbox"] { accent-color: var(--accent); }
 }
 #welcome h2 { font-size: 20px; font-weight: 600; color: var(--text-strong); margin-bottom: 8px; letter-spacing: -0.01em; }
 #welcome p { color: var(--muted); font-size: 13.5px; line-height: 1.6; margin-bottom: 20px; max-width: 46ch; }
-.welcome-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
-.welcome-conn {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    width: 100%;
-    padding: 10px 14px;
-    font: inherit;
-    color: var(--text);
-    background: var(--panel);
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    cursor: pointer;
-    text-align: left;
-}
-.welcome-conn:hover { border-color: var(--accent); background: var(--accent-wash); }
-.welcome-conn-name { font-weight: 600; color: var(--text-strong); }
 #main-content { display: flex; flex-direction: column; }
 
 /* ---------- refinements from visual review ---------- */
@@ -1005,3 +987,46 @@ body[data-env="production"] .status-bar::after { content: 'PRODUCTION'; margin-l
 .switch-close:hover { background: var(--raised-hover); color: var(--text-strong); }
 .switch-add { margin-top: 6px; padding: 7px 8px; border: 1px dashed var(--line-strong); border-radius: var(--radius); background: none; color: var(--muted); font: inherit; font-size: 12.5px; text-align: left; cursor: pointer; }
 .switch-add:hover, .switch-add:focus-visible { background: var(--raised-hover); color: var(--text-strong); }
+
+
+/* ---------- the connection grid (Connections window and the "Pick a database" screen) ---------- */
+#connections-manager-modal .modal-wide { width: min(1120px, 94vw); max-width: none; }
+#connections-manager-modal .modal-body { max-height: 74vh; overflow-y: auto; }
+#welcome.welcome-wide { max-width: 1120px; width: 100%; overflow-y: auto; max-height: 100%; }
+#welcome.welcome-wide p { max-width: 70ch; }
+.conn-search { display: block; width: 100%; box-sizing: border-box; margin: 0 0 12px; padding: 9px 12px; font: 13.5px var(--font-ui);
+    color: var(--text-strong); background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius); }
+.conn-search:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.conn-group { margin-bottom: 14px; }
+.conn-group-head { display: flex; align-items: center; gap: 7px; width: 100%; padding: 4px 2px; margin-bottom: 6px; font: 600 11.5px var(--font-ui);
+    letter-spacing: .04em; text-transform: uppercase; color: var(--muted); background: transparent; border: none; cursor: pointer; text-align: left; }
+.conn-group-head:hover { color: var(--text-strong); }
+.conn-caret { width: 10px; font-size: 10px; }
+.conn-count { margin-left: auto; font-weight: 500; color: var(--faint); }
+.conn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+.conn-tile { margin: 0; padding: 9px 10px; display: block; min-width: 0; cursor: pointer; position: relative;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.conn-tile:hover { background: var(--raised); border-color: var(--line-strong); }
+.conn-tile.connected:not(.active) { border-color: var(--ok-border); }
+.conn-tile.active { background: var(--accent-wash); border-color: var(--accent); }
+.conn-tile .connection-name { font-size: 13px; font-weight: 600; color: var(--text-strong); }
+.conn-tile .connection-info { display: flex; align-items: flex-start; justify-content: flex-start; gap: 9px; min-width: 0; width: 100%; }
+.conn-avatar { flex: none; width: 28px; height: 28px; border-radius: 8px; color: #fff; font: 700 10.5px var(--font-ui); display: flex; align-items: center; justify-content: center; }
+.conn-text { min-width: 0; flex: 1; }
+.conn-tile .connection-name { display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conn-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+.conn-where { font: 11px var(--font-data); color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.conn-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 5px; }
+.conn-used { font-size: 11px; color: var(--faint); margin-left: auto; }
+.conn-tile .connection-name { padding-right: 0; }
+/* the actions float over the tile's top-right corner, so they take no height; a connected tile always shows Disconnect */
+.conn-tile .connection-actions { position: absolute; top: 5px; right: 5px; display: flex; gap: 1px; padding: 1px 2px; margin: 0;
+    background: var(--raised); border: 1px solid var(--line); border-radius: var(--radius); opacity: 0; transition: opacity .12s; }
+.conn-tile:hover .connection-actions, .conn-tile:focus-within .connection-actions, .conn-tile.connected .connection-actions, .conn-tile.active .connection-actions { opacity: 1; }
+.conn-tile .connection-actions button { padding: 1px 6px; font-size: 11.5px; opacity: 1; }
+.conn-tile .connection-actions .edit-btn, .conn-tile .connection-actions .delete-btn { opacity: 1; }
+.conn-tile:not(:hover):not(:focus-within).connected .connection-actions .edit-btn,
+.conn-tile:not(:hover):not(:focus-within).connected .connection-actions .delete-btn,
+.conn-tile:not(:hover):not(:focus-within).active .connection-actions .edit-btn,
+.conn-tile:not(:hover):not(:focus-within).active .connection-actions .delete-btn { display: none; }
+.conn-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
