@@ -26,6 +26,14 @@
 
             <!-- Database Browser Section -->
             <div class="database-browser-section">
+                <!-- Which connection this is: its colour, name, environment and where it points -->
+                <div class="side-identity" id="side-identity" hidden>
+                    <span class="side-avatar" id="side-avatar" aria-hidden="true"></span>
+                    <div class="side-id-text">
+                        <div class="side-id-name"><span id="side-name"></span><span id="side-env"></span></div>
+                        <div class="side-where" id="side-where"></div>
+                    </div>
+                </div>
                 <div class="tables-header" id="current-database-header">
                     <span id="current-database-name">No database selected</span>
                     <button class="btn btn-sm" id="open-map-btn" title="See how the tables relate" disabled>Map</button>

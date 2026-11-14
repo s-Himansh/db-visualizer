@@ -1030,3 +1030,28 @@ body { font-feature-settings: 'kern', 'liga'; font-optical-sizing: auto; }
 #welcome.welcome-wide h2 { font-size: 34px; letter-spacing: -0.025em; }
 /* numbers and addresses line up in columns and stay the same width as they change */
 .data-table td, .data-table th, .tree-count, .results-info, .conn-where, .conn-used, kbd { font-variant-numeric: tabular-nums; }
+
+/* ---------- layout polish ---------- */
+/* the sidebar carries a soft glow of the active connection's colour, so you always know which database you are in */
+.sidebar { background: radial-gradient(300px 220px at 0% 0%, hsl(var(--hue) var(--acc-s) 55% / 0.13), transparent 72%), var(--panel); }
+:root[data-theme="sky"] .sidebar, :root[data-theme="coralcloud"] .sidebar { background: radial-gradient(300px 220px at 0% 0%, hsl(var(--hue) 90% 62% / 0.16), transparent 72%), var(--panel); }
+
+.side-identity { display: flex; align-items: center; gap: 11px; padding: 14px 14px 12px; border-bottom: 1px solid var(--line); }
+.side-identity[hidden] { display: none; }
+.side-avatar { flex: none; width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center;
+    font: 700 12px var(--font-display); letter-spacing: 0.01em; box-shadow: 0 6px 16px hsl(var(--hue) 80% 40% / 0.28); }
+.side-id-text { min-width: 0; flex: 1; }
+.side-id-name { display: flex; align-items: center; gap: 7px; min-width: 0; font: 700 16px/1.15 var(--font-display); letter-spacing: -0.012em; color: var(--text-strong); }
+.side-id-name > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.side-where { font: 11.5px var(--font-data); color: var(--muted); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* tabs: rounder, calmer, with the connection's colour on the active one */
+.tabs-header { padding: 8px 10px 0; gap: 3px; }
+.tab { border-radius: 10px 10px 0 0; padding: 8px 14px; transition: background .14s, color .14s; }
+.tab.active { box-shadow: inset 0 2px 0 var(--accent); }
+
+/* the grid: a header that picks up the accent, and a row that tints toward it on hover (opaque, so it never turns dark) */
+.data-table thead th { background: color-mix(in srgb, var(--panel) 90%, var(--accent)); backdrop-filter: blur(6px); }
+.data-table tbody tr:hover { background: color-mix(in srgb, var(--surface) 92%, var(--accent)); }
+.data-table td { padding: 6px 12px; }
+.data-table tbody tr { transition: background .1s; }
