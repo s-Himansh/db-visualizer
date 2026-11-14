@@ -2,78 +2,52 @@
    Everything visual (colour, type, density, component look) is decided here from the tokens below. */
 
 :root {
-    --ink: #12161b;
-    --panel: #181d24;
-    --surface: #1e242c;
-    --raised: #262d37;
-    --raised-hover: #2e3743;
-    --line: #2c3440;
-    --line-strong: #3a4452;
-    --text: #d6dce4;
-    --text-strong: #eef2f6;
-    --muted: #8a96a6;
-    --faint: #5f6b7a;
-    --accent: #3fb8a5;
-    --accent-strong: #5bd0bd;
-    --accent-ink: #07211d;
-    --accent-wash: rgba(63, 184, 165, 0.13);
-    --pending: #e2a944;
-    --pending-wash: rgba(226, 169, 68, 0.12);
-    --danger: #e5604f;
-    --danger-wash: rgba(229, 96, 79, 0.14);
-    --ok: #52c07a;
+    /* ===== colour system =====
+       A theme (below) sets only the base neutrals and how saturated / light its accent is. The active connection sets
+       --hue, so the accent, the sidebar highlight and the tags all take on that database's colour. Everything else
+       here is derived, so no theme needs its own copy of 80 colours. */
+    --hue: 252;
+    transition: --hue .75s cubic-bezier(.22, .8, .2, 1);
+    --acc-s: 80%; --acc-l: 62%; --acc-shift: 8%;
 
-    /* colours that used to be written inline; named so the light theme can change them */
-    --danger-border: rgba(229, 96, 79, 0.35);
-    --danger-hover: #ee7767;
-    --on-danger: #fff;
-    --accent-border: rgba(63, 184, 165, 0.45);
-    --accent-wash-strong: rgba(63, 184, 165, 0.3);
-    --ok-border: rgba(82, 192, 122, 0.45);
-    --pending-border: rgba(226, 169, 68, 0.45);
+    /* Obsidian, the default until a theme is applied */
+    --ink: #050506; --panel: #0b0b0d; --surface: #121215; --raised: #1a1a1e; --raised-hover: #232328;
+    --line: #26262c; --line-strong: #383840;
+    --text: #c9c9d2; --text-strong: #fafafa; --muted: #8f8f9b; --faint: #6c6c78; --accent-ink: #08080a;
+
+    --accent: hsl(var(--hue) var(--acc-s) var(--acc-l));
+    --accent-strong: hsl(var(--hue) var(--acc-s) calc(var(--acc-l) + var(--acc-shift)));
+    --accent-wash: hsl(var(--hue) var(--acc-s) var(--acc-l) / 0.14);
+    --accent-border: hsl(var(--hue) var(--acc-s) var(--acc-l) / 0.45);
+    --accent-wash-strong: hsl(var(--hue) var(--acc-s) var(--acc-l) / 0.3);
+    --cm-selected: hsl(var(--hue) var(--acc-s) var(--acc-l) / 0.24);
+
+    /* status and environment colours, dark reading */
+    --pending: #e2a944; --pending-wash: rgba(226, 169, 68, 0.12);
+    --danger: #e5604f; --danger-wash: rgba(229, 96, 79, 0.14);
+    --ok: #52c07a;
+    --danger-border: rgba(229, 96, 79, 0.35); --danger-hover: #ee7767; --on-danger: #fff;
+    --ok-border: rgba(82, 192, 122, 0.45); --pending-border: rgba(226, 169, 68, 0.45);
     --env-local: #8394aa; --env-development: #4aa3ff; --env-staging: #e2a944; --env-production: #e5604f;
-    --env-production-bar: rgba(229, 96, 79, 0.5);
-    --env-production-wash: rgba(229, 96, 79, 0.12);
-    --cm-selected: rgba(63, 184, 165, 0.22);
+    --env-production-bar: rgba(229, 96, 79, 0.5); --env-production-wash: rgba(229, 96, 79, 0.12);
     --cm-activeline: rgba(255, 255, 255, 0.03);
     --cm-keyword: #6cb6ff; --cm-string: #a5d6a7; --cm-atom: #d2a8ff;
-    --shadow-sm: 0 8px 24px rgba(0, 0, 0, 0.45);
-    --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.5);
-    --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
-    --backdrop: rgba(8, 11, 14, 0.55);
-    --backdrop-strong: rgba(8, 11, 14, 0.66);
-    color-scheme: dark;
-    /* the original greys from styles.css, kept as tokens so the light theme can replace them */
-    --lg-bg: #1e1e1e;
-    --lg-panel: #252526;
-    --lg-content: #2d2d30;
-    --lg-input: #3c3c3c;
-    --lg-hover: #37373d;
-    --lg-border: #3e3e42;
-    --lg-border-strong: #3a3a3a;
-    --lg-border-stronger: #4a4a4a;
-    --lg-field: #2a2a2a;
-    --lg-deep: #1a1a1a;
-    --lg-text: #ddd;
-    --lg-muted: #999;
-    --lg-muted-2: #858585;
-    --lg-faint: #666;
-    --lg-string: #ce9178;
-    --wash-03: rgba(255, 255, 255, 0.03);
-    --wash-05: rgba(255, 255, 255, 0.05);
-    --wash-06: rgba(255, 255, 255, 0.06);
-    --wash-08: rgba(255, 255, 255, 0.08);
-    --wash-10: rgba(255, 255, 255, 0.1);
-    --wash-15: rgba(255, 255, 255, 0.15);
-    --wash-20: rgba(255, 255, 255, 0.2);
-    --lg-modal-close: rgba(255, 255, 255, 0.8);
-    --lg-modal-title: #ffffff;
-    --lg-title-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-    --lg-json-key: #9cdcfe;
-    --lg-json-number: #b5cea8;
     --cm-text: #f8f8f2; --cm-variable-2: #9effff; --cm-type: #66d9ef; --cm-def: #fd971f; --cm-property: #a6e22e;
-    --lg-row-hover: #2d2d2d;
-    --lg-json-bool: #569cd6;
+    --shadow-sm: 0 8px 24px rgba(0, 0, 0, 0.45); --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.5); --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
+    --backdrop: rgba(8, 11, 14, 0.55); --backdrop-strong: rgba(8, 11, 14, 0.66);
+    --lg-string: #ce9178; --lg-json-key: #9cdcfe; --lg-json-number: #b5cea8; --lg-json-bool: #569cd6;
+    --lg-title-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    color-scheme: dark;
+
+    /* the original greys from styles.css, now read from the theme so no theme keeps a stray neutral grey */
+    --lg-bg: var(--ink); --lg-panel: var(--panel); --lg-content: var(--surface); --lg-input: var(--raised);
+    --lg-hover: var(--raised-hover); --lg-border: var(--line); --lg-border-strong: var(--line); --lg-border-stronger: var(--line-strong);
+    --lg-field: var(--surface); --lg-deep: var(--ink); --lg-text: var(--text); --lg-muted: var(--muted); --lg-muted-2: var(--muted);
+    --lg-faint: var(--faint); --lg-row-hover: var(--raised); --lg-modal-close: var(--muted); --lg-modal-title: var(--text-strong);
+    --wash-03: color-mix(in srgb, var(--text-strong) 3%, transparent); --wash-05: color-mix(in srgb, var(--text-strong) 5%, transparent);
+    --wash-06: color-mix(in srgb, var(--text-strong) 6%, transparent); --wash-08: color-mix(in srgb, var(--text-strong) 8%, transparent);
+    --wash-10: color-mix(in srgb, var(--text-strong) 10%, transparent); --wash-15: color-mix(in srgb, var(--text-strong) 15%, transparent);
+    --wash-20: color-mix(in srgb, var(--text-strong) 20%, transparent);
     --radius: 6px;
     --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
     --font-data: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
@@ -92,6 +66,7 @@
     --hover-bg: var(--raised);
     --input-bg: var(--ink);
 }
+@property --hue { syntax: '<number>'; inherits: true; initial-value: 252; }
 
 html, body { background: var(--ink); }
 body {
@@ -801,76 +776,63 @@ body[data-env="production"] .status-bar::after { content: 'PRODUCTION'; margin-l
 .ai-preview pre { margin: 6px 0 0; padding: 10px 12px; max-height: 240px; overflow: auto; white-space: pre-wrap; font: 12px/1.5 var(--font-data);
     color: var(--text); background: var(--ink); border: 1px solid var(--line); border-radius: var(--radius); }
 
-/* ---------- light theme: same tokens, different values (the app sets data-theme on <html>) ---------- */
-:root[data-theme="light"] {
-    --ink: #ffffff;
-    --panel: #f1f3f6;
-    --surface: #fafbfc;
-    --raised: #e8ecf1;
-    --raised-hover: #dde3ea;
-    --line: #d8dee6;
-    --line-strong: #c3ccd7;
-    --text: #29323d;
-    --text-strong: #10161d;
-    --muted: #596574;
-    --faint: #69758a;
-    --accent: #0e8573;
-    --accent-strong: #0b6c5d;
-    --accent-ink: #ffffff;
-    --accent-wash: rgba(14, 133, 115, 0.12);
-    --pending: #9a5f00;
-    --pending-wash: rgba(154, 95, 0, 0.12);
-    --danger: #c3372a;
-    --danger-wash: rgba(195, 55, 42, 0.1);
+/* ---------- themes: the base neutrals and the accent's saturation and lightness; the connection supplies the hue ----------
+   Sky and Obsidian are the two everyday themes (the operating system's light and dark choose between them). The other
+   five were built from the "flat colors" palettes the swatches in each comment came from. */
+:root[data-theme="obsidian"] { --hue: 252; }
+:root[data-theme="sky"] {
+    --hue: 205; --acc-s: 72%; --acc-l: 47%; --acc-shift: -9%;
+    --ink: #ffffff; --panel: #e9f2fb; --surface: #f4f9ff; --raised: #e1edf9; --raised-hover: #d3e4f5;
+    --line: #cfe1f2; --line-strong: #b4cde4;
+    --text: #324f69; --text-strong: #0e2133; --muted: #4f6f8a; --faint: #5f7e99; --accent-ink: #ffffff;
+}
+:root[data-theme="inkteal"] {  /* #1e1e28 #242333 #02a9a2 #008479 #004845 */
+    --hue: 178; --acc-s: 80%; --acc-l: 42%; --acc-shift: 10%;
+    --ink: #13131a; --panel: #1a1a24; --surface: #212130; --raised: #2a293d; --raised-hover: #343349;
+    --line: #2d2c42; --line-strong: #413f5e;
+    --text: #b9b8d0; --text-strong: #e9e9f3; --muted: #8e8dac; --faint: #6f6e90; --accent-ink: #06100f;
+}
+:root[data-theme="coraldeep"] {  /* #092d3d #ff6563 #dadfe3 #ffffff #444444 */
+    --hue: 1; --acc-s: 100%; --acc-l: 69%; --acc-shift: 6%;
+    --ink: #05202c; --panel: #092d3d; --surface: #0e3a4d; --raised: #144759; --raised-hover: #1b566b;
+    --line: #17475a; --line-strong: #2b637a;
+    --text: #dadfe3; --text-strong: #ffffff; --muted: #93acb9; --faint: #6f8f9e; --accent-ink: #2b0a0a;
+}
+:root[data-theme="earthygold"] {  /* #274334 #336157 #af8f69 #948d61 #fbd58a */
+    --hue: 40; --acc-s: 88%; --acc-l: 70%; --acc-shift: 6%;
+    --ink: #13241b; --panel: #1b3226; --surface: #274334; --raised: #305240; --raised-hover: #3a6150;
+    --line: #2f5445; --line-strong: #3f6e5c;
+    --text: #dacfb0; --text-strong: #fbf1db; --muted: #a8a98a; --faint: #849077; --accent-ink: #241a05;
+}
+:root[data-theme="slatecitrus"] {  /* #4a525f #acb8b8 #f3c500 #ee9748 #eb4c36 */
+    --hue: 49; --acc-s: 98%; --acc-l: 55%; --acc-shift: 8%;
+    --ink: #262b33; --panel: #2f3540; --surface: #383f4b; --raised: #444c5a; --raised-hover: #4f5868;
+    --line: #4a5260; --line-strong: #5f6979;
+    --text: #d3d9db; --text-strong: #f4f6f7; --muted: #acb8b8; --faint: #8b989d; --accent-ink: #221a00;
+}
+:root[data-theme="coralcloud"] {  /* the "flat colors" palette read as a light theme */
+    --hue: 1; --acc-s: 92%; --acc-l: 56%; --acc-shift: -8%;
+    --ink: #ffffff; --panel: #f1f4f6; --surface: #f8fafb; --raised: #e9eef1; --raised-hover: #dadfe3;
+    --line: #dce2e7; --line-strong: #c3ccd3;
+    --text: #2f4f5f; --text-strong: #092d3d; --muted: #52707f; --faint: #62808f; --accent-ink: #092d3d;
+}
+/* the two light themes read status colours, syntax colours and shadows the light way */
+:root[data-theme="sky"], :root[data-theme="coralcloud"] {
+    --pending: #9a5f00; --pending-wash: rgba(154, 95, 0, 0.12);
+    --danger: #c3372a; --danger-wash: rgba(195, 55, 42, 0.1);
     --ok: #1d8449;
-
-    --danger-border: rgba(195, 55, 42, 0.4);
-    --danger-hover: #a92b20;
-    --accent-border: rgba(14, 133, 115, 0.45);
-    --accent-wash-strong: rgba(14, 133, 115, 0.22);
-    --ok-border: rgba(29, 132, 73, 0.5);
-    --pending-border: rgba(154, 95, 0, 0.5);
+    --danger-border: rgba(195, 55, 42, 0.4); --danger-hover: #a92b20;
+    --ok-border: rgba(29, 132, 73, 0.5); --pending-border: rgba(154, 95, 0, 0.5);
     --env-local: #5d6b7e; --env-development: #1f6fd1; --env-staging: #9a5f00; --env-production: #c3372a;
-    --env-production-bar: rgba(195, 55, 42, 0.6);
-    --env-production-wash: rgba(195, 55, 42, 0.09);
-    --cm-selected: rgba(14, 133, 115, 0.2);
+    --env-production-bar: rgba(195, 55, 42, 0.6); --env-production-wash: rgba(195, 55, 42, 0.09);
     --cm-activeline: rgba(16, 24, 40, 0.045);
     --cm-keyword: #0b5ec2; --cm-string: #17702f; --cm-atom: #7a3fc4;
-    --shadow-sm: 0 8px 24px rgba(16, 24, 40, 0.14);
-    --shadow-md: 0 12px 32px rgba(16, 24, 40, 0.16);
-    --shadow-lg: 0 24px 60px rgba(16, 24, 40, 0.2);
-    --backdrop: rgba(16, 22, 29, 0.3);
-    --backdrop-strong: rgba(16, 22, 29, 0.4);
-    --lg-bg: #ffffff;
-    --lg-panel: #f1f3f6;
-    --lg-content: #fafbfc;
-    --lg-input: #ffffff;
-    --lg-hover: #e8ecf1;
-    --lg-border: #d8dee6;
-    --lg-border-strong: #c3ccd7;
-    --lg-border-stronger: #b3bdc9;
-    --lg-field: #ffffff;
-    --lg-deep: #f4f6f8;
-    --lg-text: #29323d;
-    --lg-muted: #596574;
-    --lg-muted-2: #596574;
-    --lg-faint: #7a8594;
-    --lg-string: #a3470f;
-    --wash-03: rgba(16, 24, 40, 0.03);
-    --wash-05: rgba(16, 24, 40, 0.05);
-    --wash-06: rgba(16, 24, 40, 0.06);
-    --wash-08: rgba(16, 24, 40, 0.08);
-    --wash-10: rgba(16, 24, 40, 0.1);
-    --wash-15: rgba(16, 24, 40, 0.15);
-    --wash-20: rgba(16, 24, 40, 0.2);
-    --lg-modal-close: #596574;
-    --lg-modal-title: #10161d;
-    --lg-title-shadow: none;
-    --lg-json-key: #0b5ec2;
-    --lg-json-number: #0a7a45;
     --cm-text: #29323d; --cm-variable-2: #0a6a78; --cm-type: #0b6b9a; --cm-def: #a65800; --cm-property: #4d7000;
-    --lg-row-hover: #e8ecf1;
-    --lg-json-bool: #0b5ec2;
+    --shadow-sm: 0 8px 24px rgba(16, 24, 40, 0.14); --shadow-md: 0 12px 32px rgba(16, 24, 40, 0.16); --shadow-lg: 0 24px 60px rgba(16, 24, 40, 0.2);
+    --backdrop: rgba(16, 22, 29, 0.3); --backdrop-strong: rgba(16, 22, 29, 0.4);
+    --lg-string: #a3470f; --lg-json-key: #0b5ec2; --lg-json-number: #0a7a45; --lg-json-bool: #0b5ec2;
+    --lg-title-shadow: none;
+    --cm-selected: hsl(var(--hue) var(--acc-s) var(--acc-l) / 0.2);
     color-scheme: light;
 }
 
@@ -1030,3 +992,22 @@ body[data-env="production"] .status-bar::after { content: 'PRODUCTION'; margin-l
 .conn-tile:not(:hover):not(:focus-within).active .connection-actions .edit-btn,
 .conn-tile:not(:hover):not(:focus-within).active .connection-actions .delete-btn { display: none; }
 .conn-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ---------- the theme picker ---------- */
+.theme-wrap { position: relative; display: inline-block; }
+.theme-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 1400; width: 300px; padding: 6px;
+    background: var(--raised); border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: var(--shadow-lg);
+    animation: theme-menu-in .16s cubic-bezier(.22, .8, .2, 1); }
+.theme-menu[hidden] { display: none; }
+@keyframes theme-menu-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } }
+.theme-row { display: flex; align-items: center; gap: 11px; width: 100%; padding: 7px 9px; border-radius: 8px; text-align: left;
+    background: transparent; border: none; color: var(--text); font: inherit; cursor: pointer; }
+.theme-row:hover, .theme-row:focus-visible { background: var(--raised-hover); outline: none; }
+.theme-row.on { background: var(--accent-wash); }
+.theme-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.theme-name { font-weight: 600; color: var(--text-strong); }
+.theme-note { font-size: 11.5px; color: var(--muted); }
+.theme-check { color: var(--accent-strong); font-weight: 700; width: 14px; text-align: right; }
+.theme-swatch { display: flex; flex: none; width: 46px; height: 28px; border-radius: 7px; overflow: hidden; border: 1px solid var(--line-strong); }
+.theme-swatch i { flex: 1; }
+.theme-swatch-system i:first-child { background: #e9f2fb; } .theme-swatch-system i:last-child { background: #0b0b0d; }

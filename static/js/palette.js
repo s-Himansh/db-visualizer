@@ -70,15 +70,18 @@ class CommandPalette {
                 const tm = app.tabManager;
                 app.savedQueries.open(tm.tabs.get(tm.activeTabId));
             }, true],
-            ['Theme: follow the system', 'light or dark, as your computer is set', () => Theme.set('system'), Theme.preference !== 'system'],
-            ['Theme: light', 'bright background', () => Theme.set('light'), Theme.preference !== 'light'],
-            ['Theme: dark', 'dark background', () => Theme.set('dark'), Theme.preference !== 'dark'],
             ['Open the sample database', 'a small online shop to explore', () => app.openSample(), true],
             ['New connection', 'add a database', () => cm.showConnectionModal(), true],
             ['Manage connections', 'edit, connect or delete', () => cm.showConnectionsManager(), true],
         ];
         for (const [label, hint, run, enabled] of actions) {
             if (enabled) items.push({ group: 'Actions', label, hint, run });
+        }
+        // the themes sit in their own group, so a long list of them never pushes the everyday actions out of view
+        for (const key of Theme.order) {
+            if (Theme.preference === key) continue;
+            items.push({ group: 'Themes', label: key === 'system' ? 'Theme: match my system' : `Theme: ${Theme.themes[key].label}`,
+                hint: key === 'system' ? 'Sky by day, Obsidian at night' : Theme.themes[key].note, run: () => Theme.set(key) });
         }
         return items;
     }

@@ -1,5 +1,6 @@
-"""Light and dark themes, through the real UI: following the system, remembering the choice, and that every screen is
-actually readable in light (a scanner measures the contrast of all visible text and looks for leftover dark panels)."""
+"""The colour themes, through the real UI: following the system, the picker, remembering the choice, and that every
+screen is readable in every theme (a scanner measures the contrast of all visible text and, in the light themes, looks
+for leftover dark panels)."""
 import pytest
 
 from conftest import answer_dialogs, manual_dialogs
@@ -35,7 +36,7 @@ AUDIT = """minRatio => {
         if (ratio < minRatio) add('contrast', el, {text: (ownText || el.value || el.placeholder).slice(0, 30), ratio: +ratio.toFixed(2)}); }
     }
     const own = parse(s.backgroundColor), r = el.getBoundingClientRect();
-    if (document.documentElement.dataset.theme === 'light' && own && own.a > .9 && r.width * r.height > 3000 && lum(own) < 0.1)
+    if (Theme.themes[document.documentElement.dataset.theme].mode === 'light' && own && own.a > .9 && r.width * r.height > 3000 && lum(own) < 0.1)
       add('dark-panel', el, {text: s.backgroundColor, area: Math.round(r.width * r.height)});
   }
   freeze.remove();
@@ -68,55 +69,111 @@ def audit(pg, min_ratio=3.0):
 def test_it_follows_the_operating_system_by_default(page):
     page.emulate_media(color_scheme='light')
     page.reload()
-    assert theme_of(page) == ['light', 'system']
+    assert theme_of(page) == ['sky', 'system']
     page.emulate_media(color_scheme='dark')
     page.reload()
-    assert theme_of(page) == ['dark', 'system']
+    assert theme_of(page) == ['obsidian', 'system']
 
 
 def test_it_switches_live_when_the_system_does(page):
     page.emulate_media(color_scheme='dark')
     page.reload()
     page.emulate_media(color_scheme='light')
-    page.wait_for_function("document.documentElement.dataset.theme === 'light'")
+    page.wait_for_function("document.documentElement.dataset.theme === 'sky'")
+
+
+def pick(pg, key):
+    pg.click('#theme-btn')
+    pg.wait_for_selector('#theme-menu:not([hidden])')
+    pg.click(f'#theme-menu [data-theme-key="{key}"]')
+    pg.wait_for_selector('#theme-menu', state='hidden')
+
+
+def test_the_picker_lists_every_theme_and_marks_the_current_one(page):
+    page.click('#theme-btn')
+    rows = page.locator('#theme-menu .theme-row').evaluate_all('els => els.map(e => [e.dataset.themeKey, e.classList.contains("on")])')
+    assert [r[0] for r in rows] == ['system', 'sky', 'obsidian', 'inkteal', 'coraldeep', 'earthygold', 'slatecitrus', 'coralcloud']
+    assert [r[0] for r in rows if r[1]] == ['system']                      # following the system is the starting point
+    assert page.inner_text('#theme-btn') == '◐ System'
 
 
 def test_a_fixed_choice_ignores_the_system(page):
-    page.click('#theme-btn')                                   # system -> light
     page.emulate_media(color_scheme='dark')
-    assert theme_of(page) == ['light', 'light']
+    pick(page, 'sky')
+    assert theme_of(page) == ['sky', 'sky']
+    page.emulate_media(color_scheme='light')
+    pick(page, 'inkteal')
+    page.emulate_media(color_scheme='dark')
+    assert theme_of(page) == ['inkteal', 'inkteal']
 
 
-def test_the_button_cycles_and_the_choice_survives_a_reload(page):
-    page.emulate_media(color_scheme='dark')
+def test_the_choice_survives_a_reload_and_the_button_names_it(page):
+    pick(page, 'coraldeep')
+    assert page.inner_text('#theme-btn') == 'Deep sea and coral'
     page.reload()
-    labels = [page.inner_text('#theme-btn')]
-    for _ in range(3):
-        page.click('#theme-btn')
-        labels.append(page.inner_text('#theme-btn'))
-    assert labels == ['◐ System', '☀ Light', '☾ Dark', '◐ System']
-    page.click('#theme-btn')                                   # light, while the system is dark
-    page.wait_for_function("document.documentElement.dataset.theme === 'light'")
+    assert theme_of(page) == ['coraldeep', 'coraldeep'] and page.inner_text('#theme-btn') == 'Deep sea and coral'
+    pick(page, 'system')
     page.reload()
-    assert theme_of(page) == ['light', 'light'] and page.inner_text('#theme-btn') == '☀ Light'
+    assert theme_of(page)[1] == 'system' and page.inner_text('#theme-btn') == '◐ System'
+
+
+def test_the_picker_works_from_the_keyboard_and_closes_on_escape(page):
+    page.focus('#theme-btn')
+    page.keyboard.press('Enter')
+    page.wait_for_selector('#theme-menu:not([hidden])')
+    page.keyboard.press('ArrowDown')
+    page.keyboard.press('ArrowDown')
+    page.keyboard.press('Enter')
+    page.wait_for_function("document.documentElement.dataset.themePref === 'obsidian'")
+    page.click('#theme-btn')
+    page.keyboard.press('Escape')
+    page.wait_for_selector('#theme-menu', state='hidden')
+    assert page.evaluate("document.activeElement.id") == 'theme-btn'
+
+
+def test_clicking_elsewhere_closes_the_picker(page):
+    page.click('#theme-btn')
+    page.wait_for_selector('#theme-menu:not([hidden])')
+    page.mouse.click(600, 400)
+    page.wait_for_selector('#theme-menu', state='hidden')
 
 
 def test_the_palette_can_change_it(connected):
     connected.keyboard.press('Meta+k')
-    connected.fill('.palette-input', 'theme: light')
+    connected.fill('.palette-input', 'theme: coral cloud')
     connected.keyboard.press('Enter')
-    connected.wait_for_function("document.documentElement.dataset.theme === 'light'")
+    connected.wait_for_function("document.documentElement.dataset.theme === 'coralcloud'")
     connected.keyboard.press('Meta+k')
     connected.fill('.palette-input', 'theme')
     labels = connected.locator('.palette-item .palette-label').all_inner_texts()
-    assert 'Theme: light' not in labels and 'Theme: dark' in labels      # the current one is not offered
+    assert 'Theme: Coral cloud' not in labels and 'Theme: Sky' in labels      # the current one is not offered
 
 
-def test_the_page_really_is_light(page):
-    use(page, 'light')
-    bg = page.evaluate("getComputedStyle(document.body).backgroundColor")
-    assert bg == 'rgb(255, 255, 255)'
-    assert page.evaluate("getComputedStyle(document.documentElement).colorScheme") == 'light'
+def test_each_light_theme_really_is_light(page):
+    for key in ('sky', 'coralcloud'):
+        use(page, key)
+        assert page.evaluate("getComputedStyle(document.body).backgroundColor") == 'rgb(255, 255, 255)'
+        assert page.evaluate("getComputedStyle(document.documentElement).colorScheme") == 'light'
+    use(page, 'obsidian')
+    assert page.evaluate("getComputedStyle(document.documentElement).colorScheme") == 'dark'
+
+
+def test_the_window_takes_on_the_active_connections_colour(connected):
+    use(connected, 'inkteal')
+    connected.evaluate("document.documentElement.style.removeProperty('--hue')")
+    connected.wait_for_timeout(900)
+    before = connected.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--hue').trim()")
+    connected.evaluate("app.connectionManager.activeConnection.environment = 'production'; app.connectionManager.applyEnvironment()")
+    connected.wait_for_timeout(1000)
+    after = connected.evaluate("getComputedStyle(document.documentElement).getPropertyValue('--hue').trim()")
+    assert before != after and float(after) == 8.0                         # Production gets the theme's warm colour
+
+
+def test_connections_keep_their_colour_between_runs(connected):
+    a = connected.evaluate("Theme.hueOf({id: 'conn_7', name: 'x'})")
+    assert a == connected.evaluate("Theme.hueOf({id: 'conn_7', name: 'x'})")
+    spread = connected.evaluate("[1,2,3,4,5,6,7,8].map(n => Theme.hueOf({id: 'conn_' + n, name: 'n' + n}))")
+    assert len(set(spread)) >= 7                                           # on Sky and Obsidian they are spread round the wheel
 
 
 # ---- every screen is readable ------------------------------------------------------------------------------
@@ -240,12 +297,13 @@ def screens(pg):
 
 def collect(pg, theme):
     use(pg, theme)
+    mode = pg.evaluate("t => Theme.themes[t].mode", theme)
     found = {}
     pg.evaluate("window.__dialogs = []")
     answer_dialogs(pg, False)
     for state in screens(pg):
         use(pg, theme)
-        issues = audit(pg, 3.0 if theme == 'light' else 2.5)
+        issues = audit(pg, 3.0 if mode == 'light' else 2.5)
         if issues:
             found[state] = issues
     return found
@@ -256,19 +314,19 @@ def report(found):
                      for state, issues in found.items())
 
 
-def test_dark_is_clean_so_the_scanner_is_not_just_noise(connected):
-    found = collect(connected, 'dark')
-    assert not found, 'the scanner flags the existing dark theme, so its threshold is wrong:\n' + report(found)
+THEMES = ['sky', 'obsidian', 'inkteal', 'coraldeep', 'earthygold', 'slatecitrus', 'coralcloud']
 
 
-def test_every_screen_is_readable_in_light(connected):
-    found = collect(connected, 'light')
-    assert not found, 'unreadable text or leftover dark panels in light:\n' + report(found)
+@pytest.mark.parametrize('theme', THEMES)
+def test_every_screen_is_readable_in_every_theme(connected, theme):
+    found = collect(connected, theme)
+    assert not found, f'unreadable text or leftover wrong-coloured panels in {theme}:\n' + report(found)
 
 
-def test_production_banner_and_environment_colours_are_readable_in_light(connected):
+@pytest.mark.parametrize('theme', ['sky', 'coralcloud'])
+def test_production_banner_and_environment_colours_are_readable_in_light(connected, theme):
     connected.evaluate("document.body.dataset.env = 'production'")
-    use(connected, 'light')
+    use(connected, theme)
     found = {'production': audit(connected)} if audit(connected) else {}
     assert not found, report(found)
 
@@ -285,20 +343,20 @@ def look(pg, selector):
 
 
 def test_hovering_a_grid_row_does_not_turn_it_dark_in_light(connected):
-    use(connected, 'light')
+    use(connected, 'sky')
     open_table(connected, 'customers')
     connected.hover('.tab-content.active .data-table tbody tr:nth-child(3)')
     connected.wait_for_timeout(250)
     seen = look(connected, '.tab-content.active .data-table tbody tr:nth-child(3)')
     assert seen['lum'] > 0.6, f"a hovered row is {seen['color']}"
-    use(connected, 'dark')
+    use(connected, 'obsidian')
     connected.hover('.tab-content.active .data-table tbody tr:nth-child(4)')
     connected.wait_for_timeout(250)
     assert look(connected, '.tab-content.active .data-table tbody tr:nth-child(4)')['lum'] < 0.1       # and still dark in dark
 
 
 def test_hovering_a_button_and_focusing_a_field_stay_light_in_light(connected):
-    use(connected, 'light')
+    use(connected, 'sky')
     connected.hover('#new-query-tab-btn')
     connected.wait_for_timeout(250)
     assert look(connected, '#new-query-tab-btn')['lum'] > 0.35
@@ -310,6 +368,6 @@ def test_hovering_a_button_and_focusing_a_field_stay_light_in_light(connected):
 
 
 def test_json_values_are_readable_in_light(connected):
-    use(connected, 'light')
+    use(connected, 'sky')
     open_table(connected, 'customers')
     assert audit(connected, 3.0) == []

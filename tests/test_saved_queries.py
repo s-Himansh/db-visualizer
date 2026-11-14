@@ -148,4 +148,4 @@ def test_the_api_needs_the_token(client):
 def test_saving_does_not_touch_the_other_settings(client):
     client.put('/api/theme', json={'theme': 'dark'})
     save(client)
-    assert client.get('/api/theme').get_json()['theme'] == 'dark'
+    assert client.get('/api/theme').get_json()['theme'] == 'obsidian'   # the old name 'dark' is mapped
