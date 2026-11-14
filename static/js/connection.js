@@ -881,6 +881,10 @@ class ConnectionManager {
         avatar.style.background = `linear-gradient(145deg, hsl(${hue} 78% 58%), hsl(${(hue + 26) % 360} 76% 44%))`;
         avatar.style.backgroundColor = `hsl(${hue} 77% 51%)`;
         avatar.style.color = Theme.inkOn(hue, 77, 51);
+        if (this.identityShown !== conn.id) {          // the avatar pops when you arrive in a different connection
+            this.identityShown = conn.id;
+            avatar.classList.remove('pop'); void avatar.offsetWidth; avatar.classList.add('pop');
+        }
         document.getElementById('side-name').textContent = conn.name;
         document.getElementById('side-env').innerHTML = this.envTag(conn);
         const where = document.getElementById('side-where');

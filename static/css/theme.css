@@ -1055,3 +1055,57 @@ body { font-feature-settings: 'kern', 'liga'; font-optical-sizing: auto; }
 .data-table tbody tr:hover { background: color-mix(in srgb, var(--surface) 92%, var(--accent)); }
 .data-table td { padding: 6px 12px; }
 .data-table tbody tr { transition: background .1s; }
+
+/* ---------- motion ----------
+   A few moments that answer something you did, not effects on everything: arriving in a connection, a new tab, an edit,
+   saving, loading, the palette. Everything stops under "reduce motion". */
+:root { --ease: cubic-bezier(.22, .8, .2, 1); --spring: cubic-bezier(.34, 1.45, .5, 1); }
+
+/* arriving in a connection: the colour crossfades (--hue is animated in the colour system) and the avatar pops */
+.side-avatar.pop { animation: avatar-pop .45s var(--spring); }
+@keyframes avatar-pop { from { transform: scale(.7); opacity: .4; } }
+
+/* a new tab eases in */
+.tab.tab-entering { animation: tab-in .28s var(--ease); }
+@keyframes tab-in { from { opacity: 0; transform: translateY(6px) scale(.96); } }
+
+/* an edit: the cell flashes once, and the Save / Undo / Discard buttons spring in when there is something to save */
+.data-table td.modified { animation: cell-flash .75s var(--ease); }
+@keyframes cell-flash { from { background: color-mix(in srgb, var(--pending) 45%, transparent); } }
+.btn[data-action="save-changes"], .btn[data-action="undo-edit"], .btn[data-action="discard-changes"] { animation: btn-in .3s var(--spring); }
+@keyframes btn-in { from { opacity: 0; transform: translateY(4px) scale(.94); } }
+
+/* saved: the toast's check draws itself */
+#toast-stack .notification { transition: opacity .25s, transform .4s var(--spring); }
+.toast-check { width: 15px; height: 15px; margin: -3px 8px -3px 0; vertical-align: -3px; fill: none; stroke: var(--ok); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.toast-check path { stroke-dasharray: 24; stroke-dashoffset: 24; }
+.notification-show .toast-check path { animation: check-draw .45s .12s var(--ease) forwards; }
+@keyframes check-draw { to { stroke-dashoffset: 0; } }
+
+/* loading: grey bars shimmer where the rows will be */
+.skeleton { padding: 6px 4px; }
+.skeleton-row { display: flex; gap: 22px; align-items: center; height: 34px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+.skeleton-row i { display: block; height: 10px; border-radius: 5px; min-width: 40px;
+    background: linear-gradient(90deg, var(--raised) 0%, var(--raised-hover) 50%, var(--raised) 100%); background-size: 220% 100%; animation: shimmer 1.15s linear infinite; }
+@keyframes shimmer { to { background-position: -220% 0; } }
+
+/* a table opening for the first time: its first rows rise in, a few milliseconds apart */
+.first-load .data-table tbody tr { animation: row-in .42s var(--ease) backwards; }
+.first-load .data-table tbody tr:nth-child(2) { animation-delay: 28ms; } .first-load .data-table tbody tr:nth-child(3) { animation-delay: 56ms; }
+.first-load .data-table tbody tr:nth-child(4) { animation-delay: 84ms; } .first-load .data-table tbody tr:nth-child(5) { animation-delay: 112ms; }
+.first-load .data-table tbody tr:nth-child(6) { animation-delay: 140ms; } .first-load .data-table tbody tr:nth-child(7) { animation-delay: 168ms; }
+.first-load .data-table tbody tr:nth-child(n+8) { animation-delay: 196ms; }
+@keyframes row-in { from { opacity: 0; transform: translateY(5px); } }
+
+/* the command palette and the connection tiles */
+.palette { animation: palette-in .2s var(--spring); }
+@keyframes palette-in { from { opacity: 0; transform: translateY(-8px) scale(.975); } }
+.palette-backdrop { animation: backdrop-in .15s; }
+@keyframes backdrop-in { from { opacity: 0; } }
+.conn-tile { transition: transform .2s var(--ease), border-color .2s, box-shadow .25s, background .15s; }
+.conn-tile:hover { transform: translateY(-1px); box-shadow: 0 8px 22px hsl(var(--hue) var(--acc-s) 45% / 0.18); }
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+    :root { transition: none; }
+}
