@@ -864,6 +864,28 @@ class ConnectionManager {
         const env = this.activeConnection && this.activeConnection.environment;
         if (env) document.body.dataset.env = env; else delete document.body.dataset.env;
         Theme.useConnection(this.activeConnection);   // the whole window takes on this database's colour
+        this.renderIdentity();
+    }
+
+    // The sidebar names the active connection: its colour, its name, its environment and where it points.
+    renderIdentity() {
+        const box = document.getElementById('side-identity');
+        if (!box) return;
+        const conn = this.activeConnection;
+        box.hidden = !conn;
+        if (!conn) return;
+        const hue = Theme.hueOf(conn);
+        const avatar = document.getElementById('side-avatar');
+        const words = String(conn.name).trim().split(/\s+|[-_]+/).filter(Boolean);
+        avatar.textContent = (words.length > 1 ? words[0][0] + words[1][0] : (words[0] || '?').slice(0, 2)).toUpperCase();
+        avatar.style.background = `linear-gradient(145deg, hsl(${hue} 78% 58%), hsl(${(hue + 26) % 360} 76% 44%))`;
+        avatar.style.backgroundColor = `hsl(${hue} 77% 51%)`;
+        avatar.style.color = Theme.inkOn(hue, 77, 51);
+        document.getElementById('side-name').textContent = conn.name;
+        document.getElementById('side-env').innerHTML = this.envTag(conn);
+        const where = document.getElementById('side-where');
+        where.textContent = this.connWhere(conn);
+        where.title = this.connWhere(conn);
     }
 
     updateConnectionBadges() {
