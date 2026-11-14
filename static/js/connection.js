@@ -154,9 +154,12 @@ class ConnectionManager {
         item.querySelector('.connection-info').addEventListener('click', (e) => { e.stopPropagation(); open(); });
         if (connectBtn) {
             item.querySelector('.edit-btn').addEventListener('click', (e) => { e.stopPropagation(); this.editConnection(conn); });
+            // Act on what the button said when it was drawn, not on the state at the moment of the click: after a reload the
+            // app learns which connections are still open on the server, and a click on "Connect" that lands just then
+            // must never turn into a disconnect. connect() already just switches to a connection that is open.
             connectBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.connectedConnections.has(conn.id)) this.disconnect(conn.id); else this.connect(conn.id);
+                if (isConnected) this.disconnect(conn.id); else this.connect(conn.id);
             });
             item.querySelector('.delete-btn').addEventListener('click', (e) => { e.stopPropagation(); this.deleteConnection(conn.id); });
         }
