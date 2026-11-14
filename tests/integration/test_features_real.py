@@ -118,3 +118,33 @@ def test_neighbouring_64_bit_ids_are_told_apart_when_editing(real):
         assert names == {'1234567890123456788': 'row0', '1234567890123456789': 'edited'}, (kind, names)
     finally:
         conn.execute_query(f'DROP TABLE {q("zbig")}')
+
+
+def test_search_matches_percent_underscore_and_backslash_literally_on_every_server(real):
+    client, cid, conn, schema, kind = real
+    q = conn.q
+    text = 'VARCHAR2(40)' if kind == 'oracle' else 'VARCHAR(40)'
+    integer = 'NUMBER(10)' if kind == 'oracle' else 'INT'
+    if kind == 'oracle':
+        conn.execute_query('BEGIN EXECUTE IMMEDIATE \'DROP TABLE "zlike"\'; EXCEPTION WHEN OTHERS THEN NULL; END;')
+    else:
+        conn.execute_query(f'DROP TABLE IF EXISTS {q("zlike")}') if kind != 'sqlserver' else conn.execute_query("IF OBJECT_ID('zlike') IS NOT NULL DROP TABLE zlike")
+    made = conn.execute_query(f'CREATE TABLE {q("zlike")} ({q("id")} {integer} PRIMARY KEY, {q("name")} {text})')
+    assert not made.get('error'), made
+    try:
+        values = ['a_b', 'axb', '50%', '500', 'back\\slash', 'bacXslash', 'br[1]x', 'bra1x']
+        for i, v in enumerate(values, 1):
+            conn.apply_batch('zlike', [{'op': 'insert', 'data': {'id': i, 'name': v}}], schema)
+
+        def found(term):
+            body = client.get('/api/data', query_string=dict(connection_id=cid, database=schema, table='zlike', search=term)).get_json()
+            assert body['success'], (kind, term, body)
+            return sorted(r['name'] for r in body['data']['rows'])
+        assert found('a_b') == ['a_b'], kind
+        assert found('50%') == ['50%'], kind
+        assert found('%') == ['50%'], kind
+        assert found('back\\s') == ['back\\slash'], kind
+        assert found('[1]') == ['br[1]x'], kind
+        assert found('AXB') == ['axb'], kind                 # still case-insensitive
+    finally:
+        conn.execute_query(f'DROP TABLE {q("zlike")}')

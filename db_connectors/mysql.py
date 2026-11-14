@@ -19,6 +19,7 @@ def serialize_value(value):
 
 
 class MySQLConnector(BaseConnector):
+    LIKE_ESCAPE = " ESCAPE '\\\\'"       # MySQL reads a backslash inside a string as its own escape, so the clause needs two
     """MySQL database connector implementation."""
 
     IDENT_QUOTE = ('`', '`')
@@ -311,8 +312,8 @@ class MySQLConnector(BaseConnector):
                     conditions.append(f"{self.q(col)} = %s")
                     filter_values.append(val)
             if term:
-                conditions.append("(" + " OR ".join(f"CAST({self.q(c)} AS CHAR) LIKE %s" for c in search_cols) + ")")
-                filter_values += [f'%{term}%'] * len(search_cols)
+                conditions.append("(" + " OR ".join(f"CAST({self.q(c)} AS CHAR) LIKE %s{self.LIKE_ESCAPE}" for c in search_cols) + ")")
+                filter_values += [self.like_pattern(term)] * len(search_cols)
             where = " WHERE " + " AND ".join(conditions) if conditions else ""
 
             query = f"SELECT * FROM {self.q(table)}{where}"

@@ -352,8 +352,8 @@ class PostgreSQLConnector(BaseConnector):
 
                     if search_column:
                         # Search specific column with LIKE
-                        conditions.append(f'{self.q(search_column)}::text ILIKE %s')
-                        filter_values.append(f'%{search_term}%')
+                        conditions.append(f'{self.q(search_column)}::text ILIKE %s{self.LIKE_ESCAPE}')
+                        filter_values.append(self.like_pattern(search_term))
                     else:
                         # Search all columns - get column names first
                         cursor = self.connection.cursor()
@@ -367,8 +367,8 @@ class PostgreSQLConnector(BaseConnector):
                         # Build OR condition for all columns
                         col_conditions = []
                         for col in all_columns:
-                            col_conditions.append(f'{self.q(col)}::text ILIKE %s')
-                            filter_values.append(f'%{search_term}%')
+                            col_conditions.append(f'{self.q(col)}::text ILIKE %s{self.LIKE_ESCAPE}')
+                            filter_values.append(self.like_pattern(search_term))
                         if col_conditions:
                             conditions.append(f"({' OR '.join(col_conditions)})")
 

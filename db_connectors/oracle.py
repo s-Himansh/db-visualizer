@@ -421,8 +421,8 @@ class OracleConnector(BaseConnector):
             if term:
                 like = []
                 for c in search_cols:
-                    values.append(f'%{term}%')
-                    like.append(f'UPPER(CAST("{c}" AS VARCHAR2(4000))) LIKE UPPER(:{len(values)})')
+                    values.append(self.like_pattern(term))
+                    like.append(f'UPPER(CAST("{c}" AS VARCHAR2(4000))) LIKE UPPER(:{len(values)}){self.LIKE_ESCAPE}')
                 conditions.append("(" + " OR ".join(like) + ")")
             where = " WHERE " + " AND ".join(conditions) if conditions else ""
 

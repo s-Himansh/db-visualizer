@@ -1,3 +1,10 @@
+// A text cell a spreadsheet would run as a formula (=HYPERLINK(...), +cmd, -x, @SUM) gets a leading quote, which
+// spreadsheets read as text. Real numbers, negative ones included, are left alone. Used by every CSV export.
+function spreadsheetSafe(value) {
+    if (typeof value !== 'string' || !/^[=+\-@\t\r]/.test(value)) return value;
+    return /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(value) ? value : "'" + value;
+}
+
 // Small UI helpers shared by every script: a styled confirm dialog and non-blocking messages.
 // They replace the browser's alert()/confirm(), which look foreign in a desktop app and freeze the page.
 window.ui = (() => {
