@@ -228,7 +228,8 @@ class TabManager {
 
         // Create tab element
         const tabElement = document.createElement('div');
-        tabElement.className = 'tab';
+        tabElement.className = 'tab tab-entering';   // a new tab eases in; the class goes once it has
+        tabElement.addEventListener('animationend', () => tabElement.classList.remove('tab-entering'), { once: true });
         tabElement.setAttribute('data-tab-id', tab.id);
         tabElement.setAttribute('data-tab-type', tab.type);
 
@@ -832,7 +833,7 @@ class TabManager {
             resultsInfo.textContent = `⏱ Executing query... ${elapsed}s`;
         }, 100);
 
-        resultsGrid.innerHTML = '<div class="spinner"></div>';
+        resultsGrid.innerHTML = this.skeletonHtml();
         tab.running = true;
         this.setRunButton(tab, true);
 
@@ -1464,7 +1465,17 @@ class TabManager {
         return this.loadTableDataWithSearch(tab);
     }
 
+    // Grey bars where the rows will be, shimmering while a table or a query loads
+    skeletonHtml(rows = 10) {
+        const widths = [62, 38, 74, 50, 66, 44, 58, 70, 42, 54];
+        return `<div class="skeleton" aria-busy="true" aria-label="Loading">${Array.from({ length: rows }, (_, i) =>
+            `<div class="skeleton-row"><i style="width:${widths[i % widths.length] * 0.3}%"></i><i style="width:${widths[(i + 3) % widths.length] * 0.6}%"></i><i style="width:${widths[(i + 6) % widths.length] * 0.4}%"></i></div>`).join('')}</div>`;
+    }
+
     renderTableData(tab, tableData, gridElement) {
+        // the rows rise in the first time a table opens; sorting, searching and paging redraw them without the show
+        gridElement.classList.toggle('first-load', !tab.revealed);
+        tab.revealed = true;
         if (!tableData || !tableData.columns || tableData.columns.length === 0) {
             gridElement.innerHTML = '<div style="padding: 20px;">No data available</div>';
             return;
@@ -2003,7 +2014,7 @@ class TabManager {
         const grid = document.getElementById(`table-data-grid-${tab.id}`);
         const info = document.getElementById(`table-info-${tab.id}`);
 
-        grid.innerHTML = '<div class="spinner"></div>';
+        grid.innerHTML = this.skeletonHtml();
 
         try {
             // Build URL with search params
@@ -3149,6 +3160,16 @@ class TabManager {
         const notification = document.createElement('div');
         notification.className = `notification notification-${type}`;
         notification.textContent = message;
+        if (type === 'success') {   // a check that draws itself: the one flourish for "it worked"
+            const check = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            check.setAttribute('class', 'toast-check');
+            check.setAttribute('viewBox', '0 0 18 18');
+            check.setAttribute('aria-hidden', 'true');
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', 'M3.5 9.5l3.5 3.5 7.5-8');
+            check.appendChild(path);
+            notification.prepend(check);
+        }
         stack.appendChild(notification);
 
         // Trigger animation
