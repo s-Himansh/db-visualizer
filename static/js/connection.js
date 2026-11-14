@@ -12,6 +12,12 @@ class ConnectionManager {
 
         // Event listeners
         document.getElementById('manage-connections-btn').addEventListener('click', () => this.showConnectionsManager());
+        // a new theme means new connection colours (Production keeps the theme's warm one)
+        document.addEventListener('theme-changed', () => {
+            this.applyEnvironment();
+            if (this.connections.length) this.renderConnections();
+            if (window.app) { window.app.renderWelcome(); if (window.app.switcher) window.app.switcher.render(); }
+        });
         document.addEventListener('keydown', (e) => {
             const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) || document.activeElement?.isContentEditable;
             if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey && this.focusConnectionSearch()) e.preventDefault();
@@ -83,8 +89,6 @@ class ConnectionManager {
     // ---- the connection grid: every saved connection visible at once, grouped, searchable ---------------------
     // One renderer for the Connections window and for the "Pick a database" screen.
 
-    static TYPE_COLOR = { mysql: '#d9822b', postgresql: '#336791', sqlite: '#5b6abf', sqlserver: '#a4373a', oracle: '#c0392b',
-                          mongodb: '#3f9142', redis: '#c0392b', cassandra: '#1287b1' };
     static TYPE_ABBR = { mysql: 'My', postgresql: 'Pg', sqlite: 'Sq', sqlserver: 'Ms', oracle: 'Or', mongodb: 'Mg', redis: 'Rd', cassandra: 'Ca' };
     static GROUPS = [['production', 'Production'], ['staging', 'Staging'], ['development', 'Development'], ['local', 'Local'], ['', 'Not tagged']];
 
@@ -112,12 +116,12 @@ class ConnectionManager {
         item.className = (mode === 'manager' ? 'connection-item conn-tile' : 'conn-tile') + (isActive ? ' active' : isConnected ? ' connected' : '');
         item.tabIndex = 0;
         item.dataset.id = conn.id;
-        const color = ConnectionManager.TYPE_COLOR[conn.type] || '#6b7683';
+        const hue = Theme.hueOf(conn);
         const where = this.connWhere(conn);
         const used = this.timeAgo(conn.last_used);
         item.innerHTML = `
             <div class="connection-info">
-                <span class="conn-avatar" style="background:${color}">${this.esc(ConnectionManager.TYPE_ABBR[conn.type] || (conn.type || '?').slice(0, 2))}</span>
+                <span class="conn-avatar">${this.esc(ConnectionManager.TYPE_ABBR[conn.type] || (conn.type || '?').slice(0, 2))}</span>
                 <div class="conn-text">
                     <div class="connection-name">${isConnected ? '<span class="conn-dot" title="Connected"></span>' : ''}${this.esc(conn.name)}</div>
                     <div class="conn-where">${this.esc(where) || '&nbsp;'}</div>
@@ -135,6 +139,10 @@ class ConnectionManager {
                 <button class="delete-btn" title="Delete connection" aria-label="Delete connection">Delete</button>
             </div>` : ''}`;
 
+        const avatar = item.querySelector('.conn-avatar');
+        avatar.style.background = `linear-gradient(145deg, hsl(${hue} 78% 58%), hsl(${(hue + 26) % 360} 76% 44%))`;
+        avatar.style.backgroundColor = `hsl(${hue} 77% 51%)`;   // the gradient's midpoint, as a solid fallback
+        avatar.style.color = Theme.inkOn(hue, 77, 51);
         // user text goes in as properties, never into attribute markup
         item.querySelector('.conn-where').title = where;
         const connectBtn = item.querySelector('.connect-btn');
@@ -852,6 +860,7 @@ class ConnectionManager {
     applyEnvironment() {
         const env = this.activeConnection && this.activeConnection.environment;
         if (env) document.body.dataset.env = env; else delete document.body.dataset.env;
+        Theme.useConnection(this.activeConnection);   // the whole window takes on this database's colour
     }
 
     updateConnectionBadges() {

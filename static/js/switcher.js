@@ -84,9 +84,10 @@ class ConnectionSwitcher {
         const words = conn.name.trim().split(/\s+|[-_]+/).filter(Boolean);
         const initials = (words.length > 1 ? words[0][0] + words[1][0] : (words[0] || '?').slice(0, 2)).toUpperCase();
         const avatar = this.el('span', 'switch-avatar', initials);
-        let hue = 0;
-        for (const ch of conn.name) hue = (hue * 31 + ch.charCodeAt(0)) % 360;
-        avatar.style.background = `hsl(${hue} 42% 42%)`;
+        const hue = Theme.hueOf(conn);
+        avatar.style.background = `linear-gradient(145deg, hsl(${hue} 78% 58%), hsl(${(hue + 26) % 360} 76% 44%))`;
+        avatar.style.backgroundColor = `hsl(${hue} 77% 51%)`;   // the gradient's midpoint, as a solid fallback
+        avatar.style.color = Theme.inkOn(hue, 77, 51);
         if (conn.environment === 'production') avatar.classList.add('env-production');
         const name = this.el('span', 'switch-name', conn.name);
         const tags = this.el('span', 'switch-tags');

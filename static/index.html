@@ -53,7 +53,10 @@
                     <span class="connection-status" id="connection-status">Not Connected</span>
                 </div>
                 <div class="toolbar-right">
-                    <button class="btn btn-sm" id="theme-btn" title="Colour theme: follow the system, light or dark"></button>
+                    <div class="theme-wrap">
+                        <button class="btn btn-sm" id="theme-btn" aria-haspopup="menu" aria-expanded="false" title="Colour theme"></button>
+                        <div class="theme-menu" id="theme-menu" role="menu" aria-label="Colour theme" hidden></div>
+                    </div>
                     <button class="btn btn-sm" id="palette-btn" title="Jump to a table, connection or action">Jump to <kbd>⌘K</kbd></button>
                 </div>
             </div>

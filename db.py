@@ -557,7 +557,7 @@ def index():
     before the first paint so there is no flash of the wrong one."""
     html = (STATIC_DIR / 'index.html').read_text(encoding='utf-8')
     theme = ('(function(){var p=%s,r=document.documentElement;r.dataset.themePref=p;'
-             "r.dataset.theme=p==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'):p;})();"
+             "r.dataset.theme=p==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'sky':'obsidian'):p;})();"
              % json.dumps(saved_theme()))
     bootstrap = (
         '<script>(function(){var t=%s,f=window.fetch;window.fetch=function(u,o){o=o||{};'
@@ -738,11 +738,14 @@ def delete_saved_query(query_id):
     return jsonify({'success': True})
 
 
-THEMES = ('system', 'light', 'dark')
+# system follows the operating system (Sky when it is light, Obsidian when it is dark); the rest are fixed choices.
+THEMES = ('system', 'sky', 'obsidian', 'inkteal', 'coraldeep', 'earthygold', 'slatecitrus', 'coralcloud')
+LEGACY_THEMES = {'light': 'sky', 'dark': 'obsidian'}   # what earlier versions saved
 
 
 def saved_theme() -> str:
     theme = load_settings().get('theme')
+    theme = LEGACY_THEMES.get(theme, theme)
     return theme if theme in THEMES else 'system'
 
 
@@ -753,10 +756,11 @@ def get_theme():
 
 @app.route('/api/theme', methods=['PUT'])
 def put_theme():
-    """Remember the theme: system (follow the operating system), light or dark."""
+    """Remember the theme: system (follow the operating system) or one of the named themes."""
     theme = (request.get_json(silent=True) or {}).get('theme')
-    if theme not in THEMES:
-        return jsonify({'success': False, 'error': 'Theme must be system, light or dark.'}), 400
+    theme = LEGACY_THEMES.get(theme, theme) if isinstance(theme, str) else theme
+    if not isinstance(theme, str) or theme not in THEMES:
+        return jsonify({'success': False, 'error': 'Theme must be system or one of: ' + ', '.join(THEMES[1:]) + '.'}), 400
     settings = load_settings()
     settings['theme'] = theme
     save_settings(settings)
