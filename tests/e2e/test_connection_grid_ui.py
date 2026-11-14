@@ -131,3 +131,22 @@ def test_names_and_addresses_stay_text(page):
     assert not page.evaluate('window.__xss')                 # nothing ran (the page was reloaded, so it is unset)
     assert page.locator('#welcome img').count() == 0
     assert boom in page.inner_text('#welcome .connection-name')
+
+
+def test_a_click_on_a_stale_connect_label_never_disconnects(page, demo_db):
+    """After a reload the app learns which connections are still open on the server. A click on "Connect" that lands just
+    then used to become a disconnect (a rare race that showed up on a loaded CI machine)."""
+    add(page, 'Racy', 'sqlite', 'local', database=demo_db, host=None, port=None)
+    page.reload()
+    page.click('#manage-connections-btn')
+    page.wait_for_selector('.connection-item:has-text("Racy") .connect-btn:text-is("Connect")')
+    # the app finds out the connection is open, but the button has not been redrawn yet
+    page.evaluate("""async () => { const c = app.connectionManager; const id = c.connections[0].id;
+        await fetch('/api/connect', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})});
+        c.connectedConnections.add(id); }""")
+    assert page.inner_text('.connection-item:has-text("Racy") .connect-btn') == 'Connect'
+    page.click('.connection-item:has-text("Racy") .connect-btn')
+    page.wait_for_selector('#tables-content .tree-item')
+    page.wait_for_timeout(600)
+    assert page.evaluate("[app.connectionManager.activeConnection && app.connectionManager.activeConnection.name, app.connectionManager.connectedConnections.size]") == ['Racy', 1]
+    assert page.locator('#tables-content .tree-item').count() > 0
