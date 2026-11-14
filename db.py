@@ -5,6 +5,7 @@ import atexit
 import contextlib
 import json
 import logging
+import mimetypes
 import os
 import re
 import secrets
@@ -18,6 +19,8 @@ import base64
 import shutil
 from datetime import datetime, date, timedelta
 from typing import Dict, Any, Optional
+
+mimetypes.add_type('font/woff2', '.woff2')   # Windows reads the type from its registry, which may not know it
 
 # Import connectors
 from db_connectors.sqlite import SQLiteConnector
