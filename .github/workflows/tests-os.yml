@@ -1,0 +1,86 @@
+name: Tests on one operating system
+
+# The unit tests and the browser tests (no database needed) on one operating system. CI calls it once for Linux and once for
+# Windows, so each shows up as one group ("Linux tests", "Windows tests") with its runners inside it. The browser tests are cut
+# into three chunks that run on separate machines (pytest-split deals them out evenly): more workers on ONE machine made the
+# tests flaky, because Chromium instances starve each other of CPU, and more machines does not.
+on:
+  workflow_call:
+    inputs:
+      runner:
+        description: The runner label to use, for example ubuntu-latest or windows-latest.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# Browser tests that talk to the Docker databases or the SSH server run in the Database tests group instead.
+env:
+  DOCKER_E2E: tests/e2e/test_real_db_saving.py tests/e2e/test_ui.py tests/e2e/test_ssh_ui.py tests/e2e/test_nosql_ui.py
+
+jobs:
+  unit:
+    name: Unit
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      # pywebview is only for the desktop window (it needs GTK/Qt on Linux); the tests drive the web app directly.
+      - name: Install dependencies
+        run: |
+          grep -v '^pywebview' requirements.txt > ci-requirements.txt
+          pip install -r ci-requirements.txt pytest
+      - name: Run the unit tests
+        run: python -m pytest tests --ignore=tests/e2e --ignore=tests/integration -q
+
+  browser:
+    name: Browser (${{ matrix.group }} of 3)
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1, 2, 3]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          grep -v '^pywebview' requirements.txt > ci-requirements.txt
+          pip install -r ci-requirements.txt pytest playwright pytest-xdist pytest-split
+      - name: Restore the Chromium cache
+        if: runner.os == 'Linux'
+        id: chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+      - name: Install Chromium
+        if: runner.os != 'Linux' || steps.chromium.outputs.cache-hit != 'true'
+        run: playwright install ${{ runner.os == 'Linux' && '--with-deps' || '' }} chromium
+      - name: Install Chromium's system libraries
+        if: runner.os == 'Linux' && steps.chromium.outputs.cache-hit == 'true'
+        run: playwright install-deps chromium
+      # Each worker starts its own app server on a free port with its own data folder, so two workers do not share state.
+      - name: Run the browser tests (chunk ${{ matrix.group }} of 3)
+        run: >
+          python -m pytest tests/e2e -n 2 -q --splits 3 --group ${{ matrix.group }} --splitting-algorithm least_duration
+          $(for f in $DOCKER_E2E; do printf -- '--ignore=%s ' "$f"; done)

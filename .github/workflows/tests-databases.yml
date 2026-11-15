@@ -1,0 +1,79 @@
+name: Tests against real databases
+
+# The integration tests and the browser tests that need a real server, in three chunks that run side by side. Each chunk
+# starts only the servers its tests use (Oracle and Cassandra take the longest to come up, and no chunk waits for both), then
+# runs its share. CI calls this once, so it shows up as one group ("Database tests") with its runners inside it.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  databases:
+    name: ${{ matrix.part }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: SQL
+            services: mysql postgres sqlserver oracle sshd
+            integration: sql
+          - part: SQL in the browser
+            services: mysql postgres sqlserver oracle sshd
+            browser: tests/e2e/test_real_db_saving.py tests/e2e/test_ui.py tests/e2e/test_ssh_ui.py
+          - part: MongoDB, Redis, Cassandra
+            services: mongodb redis cassandra
+            integration: nosql
+            browser: tests/e2e/test_nosql_ui.py
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          grep -v '^pywebview' requirements.txt > ci-requirements.txt
+          pip install -r ci-requirements.txt pytest playwright
+      - name: Restore the Chromium cache
+        if: matrix.browser
+        id: chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+      - name: Install Chromium
+        if: matrix.browser && steps.chromium.outputs.cache-hit != 'true'
+        run: playwright install --with-deps chromium
+      - name: Install Chromium's system libraries
+        if: matrix.browser && steps.chromium.outputs.cache-hit == 'true'
+        run: playwright install-deps chromium
+      - name: Create the SSH test keys
+        if: contains(matrix.services, 'sshd')
+        run: python tests/ssh_fixture/make_keys.py
+      - name: Start the test databases
+        run: docker compose -f docker-compose.test.yml up -d --wait ${{ matrix.services }}
+      # A test whose database is not up SKIPS rather than fails, so a chunk missing a server would go green having tested
+      # nothing. Every such skip says "not running", and any of them here fails the step.
+      # DBV_TEST_PART (see tests/integration/conftest.py) puts every integration test in exactly one of the two parts.
+      # Two runs: both folders have a conftest.py that tests import by name, which clash in one pytest process.
+      - name: Run the integration tests
+        if: matrix.integration
+        run: |
+          set -o pipefail
+          DBV_TEST_PART=${{ matrix.integration }} python -m pytest tests/integration -q -rs | tee out.txt
+          if grep -q "not running" out.txt; then echo "::error::a test database was not up, so its tests were skipped"; exit 1; fi
+      - name: Run the browser tests on real databases
+        if: matrix.browser
+        run: |
+          set -o pipefail
+          python -m pytest ${{ matrix.browser }} -q -rs | tee out.txt
+          if grep -q "not running" out.txt; then echo "::error::a test database was not up, so its tests were skipped"; exit 1; fi
+      - name: Show the database logs
+        if: failure()
+        run: docker compose -f docker-compose.test.yml logs --tail=80
