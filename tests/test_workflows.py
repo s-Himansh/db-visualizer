@@ -3,6 +3,7 @@ comment inside a quoted script once cost a failed Linux build). So every shell s
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -21,7 +22,12 @@ def shell_steps():
                     yield pytest.param(path.name, step.get('name', step['run'][:40]), step['run'], id=f'{path.stem}:{job_name}:{step.get("name", "step")}')
 
 
-@pytest.mark.skipif(shutil.which('bash') is None, reason='needs bash')
+# On Windows the bash on the PATH is Microsoft's WSL launcher (it says no Linux distribution is installed), not a shell that can check
+# a script. The shell is the same on every system, and the Linux and macOS runs check it.
+needs_bash = pytest.mark.skipif(sys.platform == 'win32' or shutil.which('bash') is None, reason='needs a real bash')
+
+
+@needs_bash
 @pytest.mark.parametrize('workflow, name, script', list(shell_steps()))
 def test_every_shell_step_is_valid_shell(workflow, name, script):
     script = re.sub(r'\$\{\{.*?\}\}', 'X', script, flags=re.S)             # GitHub fills these in before the shell sees the script
@@ -40,3 +46,11 @@ def test_the_workflows_parse_and_every_called_workflow_exists():
             called = job.get('uses')
             if called:
                 assert (path.parent.parent.parent / called.removeprefix('./')).exists(), f'{path.name} calls {called}, which does not exist'
+
+
+@needs_bash
+def test_the_linux_check_script_is_valid_shell():
+    script = Path(__file__).resolve().parent.parent / 'packaging' / 'linux-check.sh'
+    result = subprocess.run(['bash', '-n', str(script)], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert 'linux-check.sh' in (WORKFLOWS[0].parent / 'build-apps.yml').read_text()       # and the workflow actually runs it
