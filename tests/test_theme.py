@@ -78,3 +78,11 @@ def test_the_theme_is_set_before_any_stylesheet_loads_so_the_page_never_flashes(
     client.put('/api/theme', json={'theme': 'dark'})
     html = client.get('/').get_data(as_text=True)
     assert html.index('themePref') < html.index('rel="stylesheet"')
+
+
+def test_the_self_check_used_by_the_release_build_passes():
+    import subprocess, sys, os
+    out = subprocess.run([sys.executable, 'db.py', '--self-check'], capture_output=True, text=True, timeout=60,
+                         cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         env={**os.environ, 'DBV_DATA_DIR': os.environ.get('TMPDIR', '/tmp') + '/dbv-selfcheck'})
+    assert out.returncode == 0 and 'self-check ok' in out.stdout, out.stdout + out.stderr

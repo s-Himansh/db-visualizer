@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DB Visualizer: browse and edit your databases</title>
+<meta name="description" content="A free desktop app for SQLite, MySQL, PostgreSQL, SQL Server, Oracle, MongoDB, Redis and Cassandra. Follow the links between tables and change data without being afraid of it. Download and open, nothing to install.">
+<meta name="color-scheme" content="light dark">
+<meta property="og:title" content="DB Visualizer">
+<meta property="og:description" content="Look at your data, follow its relationships, and change it without being afraid of it.">
+<meta property="og:image" content="img/grid-sky.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231f6fd0'/%3E%3Cpath d='M8 11h16M8 16h16M8 21h16' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="fonts.css">
+<link rel="stylesheet" href="style.css">
+<link rel="preload" href="fonts/bricolage-grotesque-latin.woff2" as="font" type="font/woff2" crossorigin>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="bar">
+    <a class="brand" href="#">DB Visualizer</a>
+    <nav aria-label="Page">
+      <a href="#features">What it does</a>
+      <a href="#download">Download</a>
+      <a href="https://github.com/s-Himansh/db-visualizer">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+  <div class="hero">
+    <h1>Look at your data. Follow its relationships. Change it without being afraid of it.</h1>
+    <p class="lede">A free desktop app for SQLite, MySQL, PostgreSQL, SQL Server, Oracle, MongoDB, Redis and Cassandra. Download it, open it, and you're looking at a database. Nothing to install first.</p>
+
+    <div class="get" id="get">
+      <a class="btn" id="get-btn" data-dl="mac-arm" href="https://github.com/s-Himansh/db-visualizer/releases/latest/download/DB-Visualizer-macOS-AppleSilicon.zip">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10M5.5 9 10 13.5 14.5 9M4 17h12"/></svg>
+        <span id="get-label">Download for macOS</span>
+      </a>
+      <span class="get-note" id="get-note">Free. Your data never leaves your computer.</span>
+    </div>
+    <p class="other" id="other">
+      <a href="#download">macOS (Intel)</a><a href="#download">Windows</a><a href="#download">All downloads</a>
+    </p>
+
+    <picture class="shot">
+      <source srcset="img/grid-obsidian.png" media="(prefers-color-scheme: dark)">
+      <img src="img/grid-sky.png" width="1360" height="840" alt="The orders table in DB Visualizer: paid and pending shown as coloured labels, links to related rows, and a bar at the bottom saying two unsaved changes with Save, Undo and Discard.">
+    </picture>
+  </div>
+
+  <section id="features" aria-labelledby="f1">
+    <div class="row">
+      <div class="text">
+        <h2 id="f1">Follow a value to the row it points at</h2>
+        <p>A value that points at another table shows an arrow. Click it and you're on that exact row. Click the other arrow to see every row that points back.</p>
+        <p>Plenty of databases never declared their foreign keys. <b>Find missing relationships</b> reads the column names and suggests the links, and you accept the ones that are right.</p>
+      </div>
+      <picture class="shot">
+        <source srcset="img/links-obsidian.png" media="(prefers-color-scheme: dark)">
+        <img src="img/links-sky.png" width="1000" height="540" loading="lazy" alt="The orders table with arrows beside each customer_id that open the customer they point at.">
+      </picture>
+    </div>
+  </section>
+
+  <section aria-labelledby="f2">
+    <div class="row flip">
+      <div class="text">
+        <h2 id="f2">See how the tables connect</h2>
+        <p>The schema map draws every table that takes part in a relationship, parents on the left and children on the right. Drag to pan, scroll to zoom, click a table to open it.</p>
+        <p>Hover a table and everything it touches lights up.</p>
+      </div>
+      <picture class="shot">
+        <source srcset="img/map-obsidian.png" media="(prefers-color-scheme: dark)">
+        <img src="img/map-sky.png" width="1360" height="840" loading="lazy" alt="The schema map: customers, orders, reviews and items joined by arrows.">
+      </picture>
+    </div>
+  </section>
+
+  <section aria-labelledby="f3">
+    <div class="row">
+      <div class="text">
+        <h2 id="f3">Edit in the grid, then save it all at once</h2>
+        <p>Change cells, add rows, delete rows, and the changes wait in a bar until you press Save. They are saved together or not at all, and a row someone else changed in the meantime is never overwritten.</p>
+        <p>Mark a connection Production and it opens read-only, with a different colour over the whole window, and asks before it saves anything.</p>
+      </div>
+      <picture class="shot">
+        <source srcset="img/save-obsidian.png" media="(prefers-color-scheme: dark)">
+        <img src="img/save-sky.png" width="1000" height="540" loading="lazy" alt="Two edited cells highlighted, and a bar reading 2 unsaved changes with Save changes, Undo and Discard.">
+      </picture>
+    </div>
+  </section>
+
+  <section aria-labelledby="f4">
+    <div class="row flip">
+      <div class="text">
+        <h2 id="f4">Jump to anything</h2>
+        <p>Press <kbd>⌘K</kbd> or <kbd>Ctrl K</kbd> and type: a table, an open tab, another connection, or an action such as a new query or the schema map.</p>
+        <p>Also in the box: SSH tunnels, a SQL editor with autocomplete, CSV import that can check every row first, and export to CSV, JSON or SQL.</p>
+      </div>
+      <picture class="shot">
+        <source srcset="img/palette-obsidian.png" media="(prefers-color-scheme: dark)">
+        <img src="img/palette-sky.png" width="1360" height="840" loading="lazy" alt="The jump menu listing tables, open tabs and actions.">
+      </picture>
+    </div>
+  </section>
+
+  <section class="dbs" aria-labelledby="dbs">
+    <h2 id="dbs">Eight databases, one window</h2>
+    <div class="dbgroups">
+      <div><h3>SQL</h3><p>SQLite, MySQL, PostgreSQL, SQL Server, Oracle</p></div>
+      <div><h3>NoSQL</h3><p>MongoDB, Redis, Cassandra</p></div>
+    </div>
+  </section>
+
+  <section class="trust" aria-labelledby="trust">
+    <h2 id="trust">It runs on your computer and stays there</h2>
+    <ul>
+      <li><strong>Nothing is uploaded</strong><span>The window talks to a small server on your own machine that only answers to itself.</span></li>
+      <li><strong>Passwords are encrypted</strong><span>The key lives in your system keychain: macOS Keychain or Windows Credential Manager.</span></li>
+      <li><strong>The SQL assistant is off until you turn it on</strong><span>When it's on, it sends table and column names so it can write a query for you. It never sends your data.</span></li>
+    </ul>
+  </section>
+
+  <section id="download" aria-labelledby="dl">
+    <h2 id="dl">Download</h2>
+    <div class="all">
+      <div class="item"><div><b>macOS, Apple Silicon</b><small>M1 and newer <span data-size="mac-arm"></span></small></div><a class="btn" data-dl="mac-arm" href="https://github.com/s-Himansh/db-visualizer/releases/latest/download/DB-Visualizer-macOS-AppleSilicon.zip">Download</a></div>
+      <div class="item"><div><b>macOS, Intel</b><small>Macs from before late 2020 <span data-size="mac-intel"></span></small></div><a class="btn quiet" data-dl="mac-intel" href="https://github.com/s-Himansh/db-visualizer/releases/latest/download/DB-Visualizer-macOS-Intel.zip">Download</a></div>
+      <div class="item"><div><b>Windows</b><small>Windows 10 and 11 <span data-size="win"></span></small></div><a class="btn quiet" data-dl="win" href="https://github.com/s-Himansh/db-visualizer/releases/latest/download/DB-Visualizer-Windows.zip">Download</a></div>
+    </div>
+
+    <h3 style="font: 600 19px var(--display); margin: 44px 0 0">The first time you open it</h3>
+    <p class="fine" style="margin-top: 8px">These builds aren't signed with a developer certificate yet, so your computer asks once. It's a one-time step, and after that the app opens like any other.</p>
+    <div class="launch">
+      <div>
+        <h3>On a Mac</h3>
+        <ol>
+          <li>Open the zip and drag <b>DB Visualizer</b> to Applications.</li>
+          <li>Right-click it and choose <b>Open</b>.</li>
+          <li>Click <b>Open</b> in the box that appears.</li>
+        </ol>
+      </div>
+      <div>
+        <h3>On Windows</h3>
+        <ol>
+          <li>Right-click the zip and choose <b>Extract All</b>.</li>
+          <li>Open the folder and run <b>DB Visualizer</b>.</li>
+          <li>If Windows shows a blue box, click <b>More info</b>, then <b>Run anyway</b>.</li>
+        </ol>
+      </div>
+    </div>
+    <p class="fine">If a Mac says the app is damaged, it's the download quarantine, not the app. Run <code>xattr -dr com.apple.quarantine "/Applications/DB Visualizer.app"</code> in Terminal and open it again. Each release lists SHA-256 checksums on its <a href="https://github.com/s-Himansh/db-visualizer/releases/latest">release page</a>. There's no Linux build yet; on Linux you can <a href="https://github.com/s-Himansh/db-visualizer#-quick-start-from-source">run it from source</a>.</p>
+  </section>
+  </main>
+
+  <footer>
+    <span>DB Visualizer <span id="version"></span></span>
+    <span><a href="https://github.com/s-Himansh/db-visualizer">Source on GitHub</a> &nbsp; <a href="https://github.com/s-Himansh/db-visualizer/issues">Report a problem</a></span>
+  </footer>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 [ -x .venv/bin/python ] || python3 -m venv .venv
 .venv/bin/python -m pip install -q --upgrade pip
 .venv/bin/python -m pip install -q -r requirements-dev.txt
-.venv/bin/python -m pytest -q tests --ignore=tests/e2e
+[ -n "${SKIP_TESTS:-}" ] || .venv/bin/python -m pytest -q tests --ignore=tests/e2e     # the release workflow tests first
 .venv/bin/python -m PyInstaller --noconfirm --clean --windowed \
     --name "DB Visualizer" \
     --osx-bundle-identifier com.dbvisualizer.app \
