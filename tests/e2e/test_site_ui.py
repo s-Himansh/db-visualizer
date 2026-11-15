@@ -11,7 +11,7 @@ WIN = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like
 LINUX = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36'
 PHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1'
 RELEASE = {'tag_name': 'v1.2.3', 'assets': [
-    {'name': 'Cairn-macOS-AppleSilicon.zip', 'size': 70 * 1048576, 'browser_download_url': 'https://example.test/arm.zip'},
+    {'name': 'Cairn-macOS-AppleSilicon.dmg', 'size': 70 * 1048576, 'browser_download_url': 'https://example.test/arm.zip'},
     {'name': 'Cairn-Windows.zip', 'size': 90 * 1048576, 'browser_download_url': 'https://example.test/win.zip'}]}
 
 
@@ -32,14 +32,14 @@ def open_page(browser, ua, release=None, width=1280, chip=None):
 def test_a_mac_gets_the_mac_build(browser):
     pg = open_page(browser, MAC)
     pg.wait_for_function("document.getElementById('get-label').textContent === 'Download for macOS'")
-    assert pg.get_attribute('#get-btn', 'href').endswith('/releases/latest/download/Cairn-macOS-AppleSilicon.zip')
+    assert pg.get_attribute('#get-btn', 'href').endswith('/releases/latest/download/Cairn-macOS-AppleSilicon.dmg')
     assert 'Windows' in pg.inner_text('#other')
 
 
 def test_a_mac_whose_browser_reports_an_intel_chip_gets_the_intel_build(browser):
     pg = open_page(browser, MAC, chip='x86')
     pg.wait_for_function("document.getElementById('get-label').textContent === 'Download for macOS (Intel)'")
-    assert pg.get_attribute('#get-btn', 'href').endswith('/Cairn-macOS-Intel.zip')
+    assert pg.get_attribute('#get-btn', 'href').endswith('/Cairn-macOS-Intel.dmg')
     assert 'Apple Silicon' in pg.inner_text('#other')
 
 
@@ -66,7 +66,7 @@ def test_the_version_sizes_and_exact_links_come_from_the_latest_release(browser)
     assert pg.get_attribute('a[data-dl=win]', 'href') == 'https://example.test/win.zip'
     assert pg.inner_text('[data-size=win]') == '(90 MB)'
     assert pg.inner_text('[data-size=mac-intel]') == ''                      # a build the release doesn't have shows no size
-    assert pg.get_attribute('a[data-dl=mac-intel]', 'href').endswith('/releases/latest/download/Cairn-macOS-Intel.zip')   # and keeps its fallback
+    assert pg.get_attribute('a[data-dl=mac-intel]', 'href').endswith('/releases/latest/download/Cairn-macOS-Intel.dmg')   # and keeps its fallback
 
 
 def test_the_page_works_when_github_cannot_be_reached(browser):
