@@ -41,7 +41,7 @@ class CommandPalette {
             const current = active && active.id === conn.id;
             if (current) continue;
             items.push({
-                group: 'Connections', label: conn.name, hint: connected ? 'switch to it' : `connect (${conn.type})`,
+                group: 'Connections', label: conn.name, hint: connected ? 'switch to it' : `connect (${conn.type})`, hue: Theme.hueOf(conn),
                 run: () => connected ? cm.switchToConnection(conn.id) : cm.connect(conn.id)
             });
         }
@@ -84,6 +84,23 @@ class CommandPalette {
                 hint: key === 'system' ? 'Sky by day, Obsidian at night' : Theme.themes[key].note, run: () => Theme.set(key) });
         }
         return items;
+    }
+
+    // the small tile at the start of each result: what kind of thing it is
+    static icon(item) {
+        const tile = document.createElement('span');
+        tile.className = 'palette-ic';
+        tile.setAttribute('aria-hidden', 'true');
+        if (item.group === 'Connections') {
+            const dot = document.createElement('i');
+            dot.className = 'palette-dot';
+            dot.style.background = `hsl(${item.hue} 78% 56%)`;
+            tile.appendChild(dot);
+        } else {
+            const key = { Tables: 'table', 'Open tabs': 'tab', 'Saved queries': 'bookmark', Themes: 'theme' }[item.group] || 'bolt';
+            tile.innerHTML = Icons[key];      // fixed markup from ui.js, never user text
+        }
+        return tile;
     }
 
     // Subsequence match with a score that prefers early, consecutive and word-start hits; null = no match
@@ -211,7 +228,7 @@ class CommandPalette {
             const hint = document.createElement('span');
             hint.className = 'palette-hint';
             hint.textContent = query ? `${r.item.group.toLowerCase()} · ${r.item.hint}` : r.item.hint;
-            row.append(label, hint);
+            row.append(CommandPalette.icon(r.item), label, hint);
             this.list.appendChild(row);
         });
         this.highlight();
