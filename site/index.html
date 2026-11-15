@@ -131,15 +131,17 @@
     </div>
 
     <h3 class="sub" id="first-launch">Expect a pop-up the first time you open it</h3>
-    <p class="fine">macOS says it can't verify the app, and Windows shows a blue "Windows protected your PC" box. That's because the builds aren't signed with a developer certificate yet. It doesn't mean anything is wrong with the file. You confirm once, and after that the app opens like any other.</p>
+    <p class="fine">macOS says it can't verify the app is free of malware (newer versions offer only Done and Move to Trash), and Windows shows a blue "Windows protected your PC" box. That's because the builds aren't signed with a developer certificate yet. It doesn't mean anything is wrong with the file. You confirm once, and after that the app opens like any other.</p>
     <div class="launch">
       <div>
         <h3>On a Mac</h3>
         <ol>
-          <li>Open the zip and drag <b>DB Visualizer</b> to Applications.</li>
-          <li>Right-click it and choose <b>Open</b>.</li>
-          <li>Click <b>Open</b> in the box that appears.</li>
+          <li>Open the zip, drag <b>DB Visualizer</b> to Applications, and open it.</li>
+          <li>macOS 15 (Sequoia) and newer show a box with only <b>Done</b> and <b>Move to Trash</b>. Click <b>Done</b>. Don't move it to the Trash.</li>
+          <li>Open <b>System Settings</b>, then <b>Privacy &amp; Security</b>, and scroll down to <b>Security</b>.</li>
+          <li>Next to "DB Visualizer was blocked", click <b>Open Anyway</b>, enter your password, and click <b>Open</b>.</li>
         </ol>
+        <p class="fine" style="margin-top: 14px">On macOS 14 and older it's quicker: right-click the app, choose <b>Open</b>, then click <b>Open</b> in the box.</p>
       </div>
       <div>
         <h3>On Windows</h3>
@@ -150,7 +152,7 @@
         </ol>
       </div>
     </div>
-    <p class="fine">If a Mac says the app is damaged, that's the download quarantine, not the app. Run this in Terminal and open it again:</p>
+    <p class="fine">Prefer one command? Or if a Mac says the app is damaged: that's the download quarantine, not the app. Run this in Terminal and open it again, and the steps above aren't needed:</p>
     <pre class="narrow"><code>xattr -dr com.apple.quarantine "/Applications/DB Visualizer.app"</code></pre>
     <p class="fine">Each release lists SHA-256 checksums on its <a href="https://github.com/s-Himansh/db-visualizer/releases/latest">release page</a>. There's no Linux build yet; see the Python option below.</p>
 

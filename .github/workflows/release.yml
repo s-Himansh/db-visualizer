@@ -102,4 +102,4 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" *.zip SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" \
             --title "DB Visualizer $GITHUB_REF_NAME" --generate-notes \
-            --notes "These builds are not signed yet. First launch: on macOS right-click the app and choose Open; on Windows choose More info, then Run anyway."
+            --notes "These builds are not signed yet, so the first launch needs one confirmation. macOS 15 and newer: click Done, then System Settings > Privacy & Security > Open Anyway. Older macOS: right-click the app and choose Open. Windows: More info, then Run anyway. Details: https://s-himansh.github.io/db-visualizer/"

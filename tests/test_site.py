@@ -54,3 +54,11 @@ def test_the_python_route_uses_the_commands_the_readme_documents():
     assert './run.sh' in html and './run.sh' in readme
     assert 'python -m venv .venv' in html and r'.venv\Scripts\python db.py' in html
     assert 'requirements.txt' in html and (ROOT / 'requirements.txt').exists() and (ROOT / 'run.sh').exists()
+
+
+def test_the_mac_steps_cover_the_newer_macos_where_right_click_open_no_longer_works():
+    html = (SITE / 'index.html').read_text(encoding='utf-8')
+    assert 'Open Anyway' in html and 'Privacy &amp; Security' in html and 'Move to Trash' in html
+    assert 'xattr -dr com.apple.quarantine' in html
+    notes = (ROOT / '.github/workflows/release.yml').read_text()
+    assert 'Open Anyway' in notes
