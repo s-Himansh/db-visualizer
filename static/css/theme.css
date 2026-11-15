@@ -1109,3 +1109,49 @@ body { font-feature-settings: 'kern', 'liga'; font-optical-sizing: auto; }
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
     :root { transition: none; }
 }
+
+/* ---------- review pass: icons, grouped toolbars, tabs, the connections window, the palette and the map ---------- */
+.ico { width: 14px; height: 14px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.btn .ico { margin-right: 6px; vertical-align: -2px; }
+#palette-btn .ico { margin-right: 6px; }
+
+/* toolbars read as groups: row actions, pending edits, import, export */
+.table-toolbar { gap: 8px 6px; align-items: center; }
+.tb-group { display: inline-flex; align-items: center; gap: 6px; }
+.tb-group + .tb-group { margin-left: 6px; padding-left: 12px; border-left: 1px solid var(--line); }
+.tb-pending { display: contents; }               /* its buttons appear in line while there is something to save */
+.tb-label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; margin-right: 2px; }
+.tb-label .ico { width: 13px; height: 13px; }
+.seg { display: inline-flex; }
+.seg .btn { border-radius: 0; margin-left: -1px; }
+.seg .btn:first-child { border-radius: var(--radius) 0 0 var(--radius); margin-left: 0; }
+.seg .btn:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
+.seg .btn:only-child { border-radius: var(--radius); }
+.seg .btn:hover, .seg .btn:focus-visible { position: relative; z-index: 1; }
+
+/* many tabs: a thin scrollbar, and the active tab is scrolled into view */
+.tabs-header { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+.tabs-header::-webkit-scrollbar { height: 5px; }
+.tabs-header::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 3px; }
+.tab { flex: none; max-width: 220px; }
+.tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* the connections window: the New connection button sits inside the search row instead of stranded above it */
+#connections-manager-modal .modal-body { position: relative; }
+#connections-manager-modal .connections-manager-toolbar { position: absolute; top: 28px; right: 30px; z-index: 2; padding: 0; }
+#connections-manager-modal .conn-search { padding-right: 176px; margin-top: 0; }
+
+/* the command palette: a blurred backdrop, an icon for each result, calmer group labels */
+.palette-backdrop { backdrop-filter: blur(8px) saturate(1.15); }
+.palette-group { font-weight: 600; letter-spacing: 0; }
+.palette-item { align-items: center; justify-content: flex-start; }
+.palette-item .palette-label { flex: 1; min-width: 0; }
+.palette-item .palette-hint { margin-left: auto; }
+.palette-ic { flex: none; width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: var(--raised); color: var(--accent-strong); }
+.palette-ic .ico { width: 14px; height: 14px; }
+.palette-item.active .palette-ic { background: var(--accent-wash-strong); }
+.palette-dot { width: 10px; height: 10px; border-radius: 50%; display: block; }
+
+/* the schema map: node headers wear the connection's colour */
+.map-node-head { fill: color-mix(in srgb, var(--accent) 20%, var(--raised)); }
+.map-node-title { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.01em; }

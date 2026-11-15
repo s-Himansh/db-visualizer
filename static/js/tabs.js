@@ -193,6 +193,7 @@ class TabManager {
         const tabElement = document.querySelector(`[data-tab-id="${tabId}"]`);
         if (tabElement) {
             tabElement.classList.add('active');
+            tabElement.scrollIntoView({ inline: 'nearest', block: 'nearest' });   // with many tabs the active one is never off-screen
         }
 
         // Hide all content areas
@@ -229,7 +230,10 @@ class TabManager {
         // Create tab element
         const tabElement = document.createElement('div');
         tabElement.className = 'tab tab-entering';   // a new tab eases in; the class goes once it has
-        tabElement.addEventListener('animationend', () => tabElement.classList.remove('tab-entering'), { once: true });
+        tabElement.addEventListener('animationend', () => {
+            tabElement.classList.remove('tab-entering');
+            if (tabElement.classList.contains('active')) tabElement.scrollIntoView({ inline: 'nearest', block: 'nearest' });   // now at full size
+        }, { once: true });
         tabElement.setAttribute('data-tab-id', tab.id);
         tabElement.setAttribute('data-tab-type', tab.type);
 
@@ -293,8 +297,13 @@ class TabManager {
                         <button type="button" class="btn" data-tab-id="${tab.id}" data-action="save-query" title="Save this query under a name (saves the selected text if there is a selection)">Save</button>
                         <button type="button" class="btn" data-tab-id="${tab.id}" data-action="saved-queries" title="Your saved queries">Saved</button>
                         <button type="button" class="btn" data-tab-id="${tab.id}" data-action="history">History</button>
-                        <button type="button" class="btn" data-tab-id="${tab.id}" data-action="export-csv">Export CSV</button>
-                        <button type="button" class="btn" data-tab-id="${tab.id}" data-action="export-json">Export JSON</button>
+                        <span class="tb-group tb-export" role="group" aria-label="Export these results">
+                            <span class="tb-label">${Icons.download}Export</span>
+                            <span class="seg">
+                                <button type="button" class="btn" data-tab-id="${tab.id}" data-action="export-csv" title="CSV for spreadsheets">CSV</button>
+                                <button type="button" class="btn" data-tab-id="${tab.id}" data-action="export-json" title="The results as JSON">JSON</button>
+                            </span>
+                        </span>
                     </div>
                     <div class="ai-panel" id="ai-panel-${tab.id}" style="display: none;">
                         <div class="ai-row">
@@ -343,15 +352,26 @@ class TabManager {
             contentElement.innerHTML = `
                 <div class="table-data-container">
                     <div class="table-toolbar">
-                        <button class="btn btn-sm btn-success" data-tab-id="${tab.id}" data-action="add-row">Add row</button>
-                        <button class="btn btn-sm btn-danger" data-tab-id="${tab.id}" data-action="delete-row">Delete rows</button>
-                        <button class="btn btn-sm btn-primary" data-tab-id="${tab.id}" data-action="save-changes" style="display: none;">Save changes</button>
-                        <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="undo-edit" style="display: none;" title="Undo your last edit (Cmd/Ctrl+Z)">Undo</button>
-                        <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="discard-changes" style="display: none;">Discard</button>
-                        <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="import-csv" title="Add rows to this table from a CSV file">Import CSV</button>
-                        <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="export-table-csv" title="CSV for spreadsheets: text cells starting with = + - or @ get a leading ' so Excel does not run them. Use Export JSON or SQL for exact values.">Export CSV</button>
-                        <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="export-table-json">Export JSON</button>
-                        ${window.app.connectionManager.isSql(tab.connectionId) ? `<button class="btn btn-sm" data-tab-id="${tab.id}" data-action="export-table-sql" title="INSERT statements for the whole table">Export SQL</button>` : ''}
+                        <span class="tb-group">
+                            <button class="btn btn-sm btn-success" data-tab-id="${tab.id}" data-action="add-row">${Icons.plus}Add row</button>
+                            <button class="btn btn-sm btn-danger" data-tab-id="${tab.id}" data-action="delete-row">${Icons.trash}Delete rows</button>
+                        </span>
+                        <span class="tb-group tb-pending">
+                            <button class="btn btn-sm btn-primary" data-tab-id="${tab.id}" data-action="save-changes" style="display: none;">${Icons.check}Save changes</button>
+                            <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="undo-edit" style="display: none;" title="Undo your last edit (Cmd/Ctrl+Z)">${Icons.undo}Undo</button>
+                            <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="discard-changes" style="display: none;">${Icons.close}Discard</button>
+                        </span>
+                        <span class="tb-group">
+                            <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="import-csv" title="Add rows to this table from a CSV file">${Icons.upload}Import CSV</button>
+                        </span>
+                        <span class="tb-group tb-export" role="group" aria-label="Export this table">
+                            <span class="tb-label">${Icons.download}Export</span>
+                            <span class="seg">
+                                <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="export-table-csv" title="CSV for spreadsheets: text cells starting with = + - or @ get a leading ' so Excel does not run them. Use JSON or SQL for exact values.">CSV</button>
+                                <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="export-table-json" title="Every row as JSON">JSON</button>
+                                ${window.app.connectionManager.isSql(tab.connectionId) ? `<button class="btn btn-sm" data-tab-id="${tab.id}" data-action="export-table-sql" title="INSERT statements for the whole table">SQL</button>` : ''}
+                            </span>
+                        </span>
                         <span class="results-info" id="table-info-${tab.id}">${this.escapeHtml(tab.state.tableName)}</span>
                         <span class="filter-chip" id="filter-chip-${tab.id}" style="display: none;"></span>
                         <div class="table-search-controls">
