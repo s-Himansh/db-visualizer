@@ -5,8 +5,10 @@ name: Release
 on:
   push:
     tags: ['v*']
-  pull_request:                      # a change to the packaging is built on every platform, so it cannot break at release time
-    paths: ['.github/workflows/release.yml', 'build.sh', 'requirements.txt', 'packaging/**']
+  # A pull request that could change what gets packaged (the code and drivers that get bundled, the requirements, the build
+  # scripts) is built on every platform, so it cannot break at release time. The unit tests are CI's job, not repeated here.
+  pull_request:
+    paths: ['.github/workflows/release.yml', 'build.sh', 'packaging/**', 'db.py', 'db_connectors/**', 'requirements*.txt']
   workflow_dispatch:
 
 permissions:
@@ -15,6 +17,7 @@ permissions:
 jobs:
   test:
     name: Unit and API tests
+    if: github.event_name != 'pull_request'          # CI already ran them on the pull request
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,6 +31,7 @@ jobs:
   build:
     name: Build for ${{ matrix.label }}
     needs: test
+    if: ${{ !failure() && !cancelled() }}            # still builds when the tests were skipped (a pull request), not when they failed
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

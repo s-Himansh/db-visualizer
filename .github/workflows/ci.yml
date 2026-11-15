@@ -109,18 +109,3 @@ jobs:
       # the browser tests that need no Docker database; a different folder layout, path separators and file locking
       # than Linux and macOS are exactly what this job is for
       - run: python -m pytest tests/e2e -n 2 -q $(for f in $DOCKER_E2E; do printf -- '--ignore=%s ' "$f"; done)
-
-  macos-build:
-    name: Build the macOS app (unsigned)
-    runs-on: macos-latest
-    needs: unit
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - run: ./build.sh
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Cairn-macOS-unsigned
-          path: dist/Cairn.app
