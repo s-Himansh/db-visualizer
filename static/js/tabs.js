@@ -1557,7 +1557,9 @@ class TabManager {
         const conn = window.app.connectionManager.connections.find(c => c.id === tab.connectionId);
         const insights = !!conn && ColumnInsights.supported(conn.type);   // column insights read through SQL
         const kinds = this.columnKinds(tableData.columns, tableData.rows);
-        let html = '<table class="data-table selectable">';
+        // the row numbers in the gutter carry on across pages (page 2 starts at 101)
+        const rowOffset = Math.max(0, ((tab.state.page || 1) - 1) * (tab.state.pageSize || 100));
+        let html = `<table class="data-table selectable" style="--row-offset:${rowOffset}">`;
 
         // Header with resize handles and checkbox for selection
         html += '<thead><tr>';
@@ -1575,7 +1577,7 @@ class TabManager {
         html += '<tbody>';
         tableData.rows.forEach((row, rowIndex) => {
             html += `<tr data-row-index="${rowIndex}">`;
-            html += `<td style="width: 40px;"><input type="checkbox" class="row-checkbox" data-row-index="${rowIndex}"></td>`;
+            html += `<td class="gutter"><span class="rowno" aria-hidden="true">${rowOffset + rowIndex + 1}</span><input type="checkbox" class="row-checkbox" data-row-index="${rowIndex}" aria-label="Select row ${rowOffset + rowIndex + 1}"></td>`;
             tableData.columns.forEach(col => {
                 const value = row[col];
 

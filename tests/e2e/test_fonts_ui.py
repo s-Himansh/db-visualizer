@@ -15,11 +15,11 @@ def test_the_three_typefaces_load_and_apply(page):
     assert family('#welcome h2').startswith('"Bricolage Grotesque"')
 
 
-def test_grid_data_is_in_the_monospace_face(connected):
+def test_grid_numbers_are_in_the_monospace_face(connected):
     connected.locator('#tables-content .tree-item').filter(has=connected.locator('.tree-label:text-is("customers")')).click()
     connected.wait_for_selector('.tab-content.active .data-table tbody tr')
     connected.wait_for_function("document.fonts.load('400 13px \"Geist Mono\"').then(f => f.length > 0)")
-    assert connected.evaluate("getComputedStyle(document.querySelector('.tab-content.active .data-table td')).fontFamily").startswith('"Geist Mono"')
+    assert connected.evaluate("getComputedStyle(document.querySelector('.tab-content.active .data-table td.cell-num')).fontFamily").startswith('"Geist Mono"')
 
 
 def test_nothing_is_requested_from_outside_the_app(browser, server):
