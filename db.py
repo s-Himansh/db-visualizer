@@ -562,6 +562,7 @@ def handle_error(e):
 def index():
     """Serve the main page with the per-launch API token attached to every fetch, and the saved theme applied
     before the first paint so there is no flash of the wrong one."""
+    logger.info('serving the main page')        # one line per page load; the Linux build check looks for it to see the window drew something
     html = (STATIC_DIR / 'index.html').read_text(encoding='utf-8')
     theme = ('(function(){var p=%s,r=document.documentElement;r.dataset.themePref=p;'
              "r.dataset.theme=p==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'sky':'obsidian'):p;})();"
