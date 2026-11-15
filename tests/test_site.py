@@ -28,9 +28,9 @@ def test_every_file_the_page_uses_is_there():
 
 
 def test_download_links_name_the_files_the_release_workflow_builds():
-    built = set(re.findall(r'file: (Cairn-[\w-]+)', (ROOT / '.github/workflows/release.yml').read_text()))
-    linked = set(re.findall(r'releases/latest/download/(Cairn-[\w-]+)\.zip', (SITE / 'index.html').read_text()))
-    in_script = set(re.findall(r"file: '(Cairn-[\w-]+)\.zip'", (SITE / 'app.js').read_text()))
+    built = {f'{name}.{ext}' for name, ext in re.findall(r'file: (Cairn-[\w-]+), ext: (\w+)', (ROOT / '.github/workflows/release.yml').read_text())}
+    linked = set(re.findall(r'releases/latest/download/(Cairn-[\w-]+\.(?:zip|dmg))', (SITE / 'index.html').read_text()))
+    in_script = set(re.findall(r"file: '(Cairn-[\w.-]+)'", (SITE / 'app.js').read_text()))
     assert built == linked == in_script and len(built) == 3, (built, linked, in_script)
 
 
@@ -62,3 +62,13 @@ def test_the_mac_steps_cover_the_newer_macos_where_right_click_open_no_longer_wo
     assert 'xattr -dr com.apple.quarantine' in html
     notes = (ROOT / '.github/workflows/release.yml').read_text()
     assert 'Open Anyway' in notes
+
+
+def test_the_mac_disk_image_layout_has_the_app_an_applications_shortcut_and_its_artwork():
+    settings = {'defines': {'app': 'dist/Cairn.app'}}
+    exec((ROOT / 'packaging' / 'dmg_settings.py').read_text(), settings)           # the way dmgbuild reads it
+    assert settings['files'] == ['dist/Cairn.app'] and settings['symlinks'] == {'Applications': '/Applications'}
+    assert set(settings['icon_locations']) == {'Cairn.app', 'Applications'}
+    assert settings['icon_locations']['Cairn.app'][0] < settings['icon_locations']['Applications'][0]      # the app on the left, the drop target on the right
+    assert (ROOT / settings['background']).stat().st_size > 1000                    # run from the repo root, as the workflow does
+    assert 'dmgbuild -s packaging/dmg_settings.py' in (ROOT / '.github/workflows/release.yml').read_text()

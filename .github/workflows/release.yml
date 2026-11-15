@@ -6,7 +6,7 @@ on:
   push:
     tags: ['v*']
   pull_request:                      # a change to the packaging is built on every platform, so it cannot break at release time
-    paths: ['.github/workflows/release.yml', 'build.sh', 'requirements.txt']
+    paths: ['.github/workflows/release.yml', 'build.sh', 'requirements.txt', 'packaging/**']
   workflow_dispatch:
 
 permissions:
@@ -33,9 +33,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-latest, label: macOS (Apple Silicon), file: Cairn-macOS-AppleSilicon }
-          - { os: macos-15-intel, label: macOS (Intel), file: Cairn-macOS-Intel }
-          - { os: windows-latest, label: Windows, file: Cairn-Windows }
+          - { os: macos-latest, label: macOS (Apple Silicon), file: Cairn-macOS-AppleSilicon, ext: dmg }
+          - { os: macos-15-intel, label: macOS (Intel), file: Cairn-macOS-Intel, ext: dmg }
+          - { os: windows-latest, label: Windows, file: Cairn-Windows, ext: zip }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -69,9 +69,13 @@ jobs:
           $p = Start-Process -FilePath "dist\Cairn\Cairn.exe" -ArgumentList "--self-check" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "self-check exited with $($p.ExitCode)" }
 
-      - name: Zip it (macOS)
+      # The disk image people open: Cairn and an Applications shortcut to drag it onto. dmgbuild writes the window layout
+      # itself, so it needs no Finder (a build machine has no screen to script).
+      - name: Make the disk image (macOS)
         if: runner.os == 'macOS'
-        run: ditto -c -k --sequesterRsrc --keepParent "dist/Cairn.app" "${{ matrix.file }}.zip"
+        run: |
+          python -m pip install dmgbuild
+          dmgbuild -s packaging/dmg_settings.py -D app="dist/Cairn.app" "Cairn" "${{ matrix.file }}.dmg"
       - name: Zip it (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
@@ -80,7 +84,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.file }}
-          path: ${{ matrix.file }}.zip
+          path: ${{ matrix.file }}.${{ matrix.ext }}
           if-no-files-found: error
 
   publish:
@@ -95,11 +99,11 @@ jobs:
         with:
           merge-multiple: true
       - name: Checksums
-        run: sha256sum *.zip | tee SHA256SUMS.txt
+        run: sha256sum *.zip *.dmg | tee SHA256SUMS.txt
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" *.zip SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" \
+          gh release create "$GITHUB_REF_NAME" *.zip *.dmg SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" \
             --title "Cairn $GITHUB_REF_NAME" --generate-notes \
             --notes "These builds are not signed yet, so the first launch needs one confirmation. macOS 15 and newer: click Done, then System Settings > Privacy & Security > Open Anyway. Older macOS: right-click the app and choose Open. Windows: More info, then Run anyway. Details: https://s-himansh.github.io/db-visualizer/"

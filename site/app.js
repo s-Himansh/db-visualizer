@@ -3,8 +3,8 @@
 (function () {
   const REPO = 's-Himansh/db-visualizer';
   const BUILDS = {
-    'mac-arm': { file: 'Cairn-macOS-AppleSilicon.zip', label: 'Download for macOS', short: 'macOS (Apple Silicon)' },
-    'mac-intel': { file: 'Cairn-macOS-Intel.zip', label: 'Download for macOS (Intel)', short: 'macOS (Intel)' },
+    'mac-arm': { file: 'Cairn-macOS-AppleSilicon.dmg', label: 'Download for macOS', short: 'macOS (Apple Silicon)' },
+    'mac-intel': { file: 'Cairn-macOS-Intel.dmg', label: 'Download for macOS (Intel)', short: 'macOS (Intel)' },
     win: { file: 'Cairn-Windows.zip', label: 'Download for Windows', short: 'Windows' }
   };
   const $ = (sel) => document.querySelector(sel);
