@@ -1,23 +1,18 @@
 name: Release
 
 # Push a tag like v0.1.0 to build the apps and publish them as a GitHub Release (the download page links to it).
-# Run it by hand (Actions > Release > Run workflow) to build everything without publishing, as a dry run.
+# Pull requests are not built here: CI builds the apps (the same Build the apps workflow) when a pull request could change
+# what gets packaged, so a pull request shows one run, not two.
 on:
   push:
     tags: ['v*']
-  # A pull request that could change what gets packaged (the code and drivers that get bundled, the requirements, the build
-  # scripts) is built on every platform, so it cannot break at release time. The unit tests are CI's job, not repeated here.
-  pull_request:
-    paths: ['.github/workflows/release.yml', 'build.sh', 'packaging/**', 'db.py', 'db_connectors/**', 'requirements*.txt']
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   test:
-    name: Unit and API tests
-    if: github.event_name != 'pull_request'          # CI already ran them on the pull request
+    name: Tests before publishing
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,70 +23,12 @@ jobs:
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m pytest -q tests --ignore=tests/e2e --ignore=tests/integration
 
+  # Starts at once, alongside the tests; only publishing waits for both.
   build:
-    name: Build for ${{ matrix.label }}
-    runs-on: ${{ matrix.os }}                        # builds start at once, alongside the tests; only publishing waits for both
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - { os: macos-latest, label: macOS (Apple Silicon), file: Cairn-macOS-AppleSilicon, ext: dmg }
-          - { os: macos-15-intel, label: macOS (Intel), file: Cairn-macOS-Intel, ext: dmg }
-          - { os: windows-latest, label: Windows, file: Cairn-Windows, ext: zip }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Build the app (macOS)
-        if: runner.os == 'macOS'
-        run: SKIP_TESTS=1 ./build.sh
-
-      - name: Build the app (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          python -m pip install -r requirements-dev.txt
-          python -m PyInstaller --noconfirm --clean --windowed --name "Cairn" --icon packaging/cairn.ico `
-            --add-data "static;static" --collect-submodules db_connectors `
-            --collect-all cassandra --collect-all pymssql --collect-submodules keyring `
-            --collect-submodules anthropic --copy-metadata keyring db.py
-
-      # A packaged app can be missing things the source tree has. Run the built program itself and have it check.
-      - name: Check the built app starts (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          "dist/Cairn.app/Contents/MacOS/Cairn" --self-check | tee check.txt
-          grep -q "self-check ok" check.txt
-      - name: Check the built app starts (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $p = Start-Process -FilePath "dist\Cairn\Cairn.exe" -ArgumentList "--self-check" -Wait -PassThru
-          if ($p.ExitCode -ne 0) { throw "self-check exited with $($p.ExitCode)" }
-
-      # The disk image people open: Cairn and an Applications shortcut to drag it onto. dmgbuild writes the window layout
-      # itself, so it needs no Finder (a build machine has no screen to script).
-      - name: Make the disk image (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          python -m pip install dmgbuild
-          dmgbuild -s packaging/dmg_settings.py -D app="dist/Cairn.app" "Cairn" "${{ matrix.file }}.dmg"
-      - name: Zip it (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: Compress-Archive -Path "dist\Cairn" -DestinationPath "${{ matrix.file }}.zip"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.file }}
-          path: ${{ matrix.file }}.${{ matrix.ext }}
-          if-no-files-found: error
+    uses: ./.github/workflows/build-apps.yml
 
   publish:
     name: Publish the release
-    if: startsWith(github.ref, 'refs/tags/v')
     needs: [test, build]
     runs-on: ubuntu-latest
     permissions:

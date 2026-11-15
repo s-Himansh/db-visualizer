@@ -19,6 +19,36 @@ env:
 # run side by side on separate machines. (More workers on ONE machine made the browser tests flaky: Chromium instances starve
 # each other of CPU. More machines does not.)
 jobs:
+  # Did this pull request change anything that gets packaged into the apps: the build scripts, the code and drivers that
+  # are bundled, the requirements? Only then is it worth building the apps (below).
+  changes:
+    name: Does it touch the packaging?
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      packaging: ${{ steps.diff.outputs.packaging }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        run: |
+          if git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" \
+             | grep -qE '^(\.github/workflows/(ci|build-apps|release)\.yml|build\.sh|packaging/|db\.py|db_connectors/|requirements[^/]*\.txt)'; then
+            echo "packaging=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "packaging=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # The apps for every platform, built the way a release builds them (the Build the apps workflow), so a change that breaks
+  # packaging is caught in review. It runs inside this CI run, so a pull request shows one run.
+  packaging:
+    name: Apps
+    needs: changes
+    if: needs.changes.outputs.packaging == 'true'
+    uses: ./.github/workflows/build-apps.yml
+
   unit:
     name: Unit and API tests
     runs-on: ubuntu-latest
