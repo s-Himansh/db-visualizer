@@ -110,9 +110,11 @@ def test_a_fixed_choice_ignores_the_system(page):
 def test_the_choice_survives_a_reload_and_the_button_names_it(page):
     pick(page, 'coraldeep')
     assert page.inner_text('#theme-btn') == 'Deep sea and coral'
+    page.wait_for_function("fetch('/api/theme').then(r => r.json()).then(d => d.theme === 'coraldeep')")   # saved before we reload
     page.reload()
     assert theme_of(page) == ['coraldeep', 'coraldeep'] and page.inner_text('#theme-btn') == 'Deep sea and coral'
     pick(page, 'system')
+    page.wait_for_function("fetch('/api/theme').then(r => r.json()).then(d => d.theme === 'system')")
     page.reload()
     assert theme_of(page)[1] == 'system' and page.inner_text('#theme-btn') == '◐ System'
 
