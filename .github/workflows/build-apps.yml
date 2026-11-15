@@ -124,7 +124,7 @@ jobs:
             export DBV_DATA_DIR=/tmp/cairn-data
             export QTWEBENGINE_CHROMIUM_FLAGS="--no-sandbox --disable-gpu"      # a build machine has no GPU
             export LIBGL_ALWAYS_SOFTWARE=1                                      # so Mesa draws in software
-            SCREEN="-screen 0 1280x1024x24"        # xvfb-run's default screen is 8-bit, which has no OpenGL-capable visual
+            SCREEN="-screen 0 1280x1024x24"        # the default screen of xvfb-run is 8-bit, which has no OpenGL-capable visual
             timeout -s KILL 120 xvfb-run -a -s "$SCREEN" ./Cairn --self-check
             # Chromium shuts down through its event loop on a polite stop, which a headless run never completes, so the stop is
             # followed by a hard kill; without that this step waited forever.
