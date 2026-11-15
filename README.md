@@ -384,7 +384,7 @@ docker compose -f docker-compose.test.yml up -d --wait     # MySQL, PostgreSQL, 
 ./build.sh                                                 # runs the tests, then builds dist/Cairn.app
 ```
 
-GitHub Actions runs the unit, real-database and browser tests on Linux, the unit and browser tests on Windows, and builds the macOS app, on every push and pull request. Pushing a tag like `v0.1.0` runs the Release workflow: it builds the macOS (Apple Silicon and Intel) and Windows apps, has each built app check itself (`--self-check`), and publishes them as a GitHub Release. The download page in `site/` is published to GitHub Pages when it changes on main; `tests/e2e/shots_for_site.py` regenerates its screenshots.
+GitHub Actions runs the unit, real-database and browser tests on Linux, the unit and browser tests on Windows, on every pull request and every push to main. A pull request that could change what gets packaged (the code, the drivers, the requirements, the build scripts) also builds the apps for every platform. Pushing a tag like `v0.1.0` runs the Release workflow: it builds the macOS (Apple Silicon and Intel) and Windows apps, has each built app check itself (`--self-check`), and publishes them as a GitHub Release. The download page in `site/` is published to GitHub Pages when it changes on main; `tests/e2e/shots_for_site.py` regenerates its screenshots.
 
 <details>
 <summary><b>Status: what is and isn't verified</b></summary>
