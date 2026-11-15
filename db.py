@@ -1888,7 +1888,24 @@ def shutdown():
         connector.close_tunnel()
 
 
+def self_check():
+    """`DB Visualizer --self-check`: prove a packaged build is whole (window library, keychain, pages, fonts) without
+    opening a window. The release build runs it on every platform, because a missing bundled file only shows up frozen."""
+    import webview, keyring                                              # noqa: F401  (importing them is the test)
+    keyring.get_keyring()
+    client = app.test_client()
+    for url in ('/', '/static/js/tabs.js', '/static/fonts/instrument-sans-latin.woff2'):
+        status = client.get(url).status_code
+        if status != 200:
+            print(f'self-check failed: {url} gave {status}')
+            return 1
+    print('self-check ok')
+    return 0
+
+
 if __name__ == '__main__':
+    if '--self-check' in sys.argv:
+        sys.exit(self_check())
     import webview
 
     atexit.register(shutdown)

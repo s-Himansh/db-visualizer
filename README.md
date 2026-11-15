@@ -11,7 +11,8 @@ A desktop app for browsing and editing SQL and NoSQL databases, with guard rails
 ![NoSQL](https://img.shields.io/badge/NoSQL-MongoDB%20·%20Redis%20·%20Cassandra-47A248)
 [![CI](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
 
-[Quick start](#-quick-start) ·
+[Download](https://s-himansh.github.io/db-visualizer/) ·
+[Quick start](#-quick-start-from-source) ·
 [What it does](#-what-it-does) ·
 [How it works](#-how-it-works) ·
 [Safety](#-safety-rails) ·
@@ -23,7 +24,13 @@ A desktop app for browsing and editing SQL and NoSQL databases, with guard rails
 
 ---
 
-## ⚡ Quick start
+## ⬇️ Download
+
+**[Get DB Visualizer for macOS or Windows](https://s-himansh.github.io/db-visualizer/)**: download, open, done. No Python and nothing to install. Every build is also on the [Releases page](../../releases/latest) with checksums. The builds aren't signed yet, so the first launch asks you to confirm once (the page shows how).
+
+Prefer to run it from source, or on Linux? Use the quick start below.
+
+## ⚡ Quick start (from source)
 
 ```bash
 ./run.sh
@@ -377,7 +384,7 @@ docker compose -f docker-compose.test.yml up -d --wait     # MySQL, PostgreSQL, 
 ./build.sh                                                 # runs the tests, then builds dist/DB Visualizer.app
 ```
 
-GitHub Actions runs the unit, real-database and browser tests on Linux, and builds the macOS app, on every push and pull request.
+GitHub Actions runs the unit, real-database and browser tests on Linux, the unit and browser tests on Windows, and builds the macOS app, on every push and pull request. Pushing a tag like `v0.1.0` runs the Release workflow: it builds the macOS (Apple Silicon and Intel) and Windows apps, has each built app check itself (`--self-check`), and publishes them as a GitHub Release. The download page in `site/` is published to GitHub Pages when it changes on main; `tests/e2e/shots_for_site.py` regenerates its screenshots.
 
 <details>
 <summary><b>Status: what is and isn't verified</b></summary>

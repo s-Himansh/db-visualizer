@@ -1,0 +1,105 @@
+name: Release
+
+# Push a tag like v0.1.0 to build the apps and publish them as a GitHub Release (the download page links to it).
+# Run it by hand (Actions > Release > Run workflow) to build everything without publishing, as a dry run.
+on:
+  push:
+    tags: ['v*']
+  pull_request:                      # a change to the packaging is built on every platform, so it cannot break at release time
+    paths: ['.github/workflows/release.yml', 'build.sh', 'requirements.txt']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Unit and API tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install -r requirements-dev.txt
+      - run: python -m pytest -q tests --ignore=tests/e2e --ignore=tests/integration
+
+  build:
+    name: Build for ${{ matrix.label }}
+    needs: test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, label: macOS (Apple Silicon), file: DB-Visualizer-macOS-AppleSilicon }
+          - { os: macos-15-intel, label: macOS (Intel), file: DB-Visualizer-macOS-Intel }
+          - { os: windows-latest, label: Windows, file: DB-Visualizer-Windows }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build the app (macOS)
+        if: runner.os == 'macOS'
+        run: SKIP_TESTS=1 ./build.sh
+
+      - name: Build the app (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m pip install -r requirements-dev.txt
+          python -m PyInstaller --noconfirm --clean --windowed --name "DB Visualizer" `
+            --add-data "static;static" --collect-submodules db_connectors `
+            --collect-all cassandra --collect-all pymssql --collect-submodules keyring `
+            --collect-submodules anthropic --copy-metadata keyring db.py
+
+      # A packaged app can be missing things the source tree has. Run the built program itself and have it check.
+      - name: Check the built app starts (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          "dist/DB Visualizer.app/Contents/MacOS/DB Visualizer" --self-check | tee check.txt
+          grep -q "self-check ok" check.txt
+      - name: Check the built app starts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist\DB Visualizer\DB Visualizer.exe" -ArgumentList "--self-check" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "self-check exited with $($p.ExitCode)" }
+
+      - name: Zip it (macOS)
+        if: runner.os == 'macOS'
+        run: ditto -c -k --sequesterRsrc --keepParent "dist/DB Visualizer.app" "${{ matrix.file }}.zip"
+      - name: Zip it (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path "dist\DB Visualizer" -DestinationPath "${{ matrix.file }}.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.file }}
+          path: ${{ matrix.file }}.zip
+          if-no-files-found: error
+
+  publish:
+    name: Publish the release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - name: Checksums
+        run: sha256sum *.zip | tee SHA256SUMS.txt
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" *.zip SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" \
+            --title "DB Visualizer $GITHUB_REF_NAME" --generate-notes \
+            --notes "These builds are not signed yet. First launch: on macOS right-click the app and choose Open; on Windows choose More info, then Run anyway."
