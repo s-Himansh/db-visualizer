@@ -1,0 +1,76 @@
+name: Build the apps
+
+# Builds Cairn for macOS (Apple Silicon and Intel) and Windows and uploads each as an artifact. It does not publish anything.
+# Two things call it: the Release workflow (on a version tag, which then publishes the files) and CI (on a pull request that
+# could change what gets packaged, so a packaging problem is caught in review). Run it by hand for a dry run.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.label }}                        # shown as  Build / <platform>  (the caller names the group)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, label: macOS (Apple Silicon), file: Cairn-macOS-AppleSilicon, ext: dmg }
+          - { os: macos-15-intel, label: macOS (Intel), file: Cairn-macOS-Intel, ext: dmg }
+          - { os: windows-latest, label: Windows, file: Cairn-Windows, ext: zip }
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build the app (macOS)
+        if: runner.os == 'macOS'
+        run: SKIP_TESTS=1 ./build.sh
+
+      - name: Build the app (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          python -m pip install -r requirements-dev.txt
+          python -m PyInstaller --noconfirm --clean --windowed --name "Cairn" --icon packaging/cairn.ico `
+            --add-data "static;static" --collect-submodules db_connectors `
+            --collect-all cassandra --collect-all pymssql --collect-submodules keyring `
+            --collect-submodules anthropic --copy-metadata keyring db.py
+
+      # A packaged app can be missing things the source tree has. Run the built program itself and have it check.
+      - name: Check the built app starts (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          "dist/Cairn.app/Contents/MacOS/Cairn" --self-check | tee check.txt
+          grep -q "self-check ok" check.txt
+      - name: Check the built app starts (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist\Cairn\Cairn.exe" -ArgumentList "--self-check" -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "self-check exited with $($p.ExitCode)" }
+
+      # The disk image people open: Cairn and an Applications shortcut to drag it onto. dmgbuild writes the window layout
+      # itself, so it needs no Finder (a build machine has no screen to script).
+      - name: Make the disk image (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          python -m pip install dmgbuild
+          dmgbuild -s packaging/dmg_settings.py -D app="dist/Cairn.app" "Cairn" "${{ matrix.file }}.dmg"
+      - name: Zip the app (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path "dist\Cairn" -DestinationPath "${{ matrix.file }}.zip"
+
+      - name: Keep the file for the next job
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.file }}
+          path: ${{ matrix.file }}.${{ matrix.ext }}
+          if-no-files-found: error

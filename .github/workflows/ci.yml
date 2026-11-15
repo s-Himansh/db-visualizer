@@ -11,101 +11,59 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Browser tests that talk to the Docker databases or the SSH server; every other e2e file runs in the `browser` job.
-env:
-  DOCKER_E2E: tests/e2e/test_real_db_saving.py tests/e2e/test_ui.py tests/e2e/test_ssh_ui.py tests/e2e/test_nosql_ui.py
-
+# CI is a short list of groups. Each group is a workflow of its own, so GitHub shows it as one collapsible box with its runners
+# inside:
+#
+#   Checks           (does the pull request touch the packaging?)
+#   Build            macOS (Apple Silicon), macOS (Intel), Windows      only when packaging changed   build-apps.yml
+#   Linux tests      Unit, Browser (1 of 3), (2 of 3), (3 of 3)                                         tests-os.yml
+#   Windows tests    Unit, Browser (1 of 3), (2 of 3), (3 of 3)                                         tests-os.yml
+#   Database tests   SQL, SQL in the browser, MongoDB / Redis / Cassandra                               tests-databases.yml
+#
+# The wait on a pull request is the slowest single runner, so the long suites are cut into chunks on separate machines.
 jobs:
-  unit:
-    name: Unit and API tests
+  changes:
+    name: Checks
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      packaging: ${{ steps.diff.outputs.packaging }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Check out the code
+        uses: actions/checkout@v4
         with:
-          python-version: '3.11'
-          cache: pip
-      # pywebview is only for the desktop window (it needs GTK/Qt on Linux); the tests drive the web app directly.
-      - run: |
-          grep -v '^pywebview' requirements.txt > ci-requirements.txt
-          pip install -r ci-requirements.txt pytest
-      - run: python -m pytest tests --ignore=tests/e2e --ignore=tests/integration -q
+          fetch-depth: 0
+      # Anything that gets packaged into the apps: the build scripts, the code and drivers that are bundled, the requirements.
+      - name: Does this pull request touch the packaging?
+        id: diff
+        run: |
+          if git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" \
+             | grep -qE '^(\.github/workflows/(ci|build-apps|release)\.yml|build\.sh|packaging/|db\.py|db_connectors/|requirements[^/]*\.txt)'; then
+            echo "packaging=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "packaging=false" >> "$GITHUB_OUTPUT"
+          fi
 
-  integration:
-    name: Real databases, SSH and their browser tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: pip
-      - run: |
-          grep -v '^pywebview' requirements.txt > ci-requirements.txt
-          pip install -r ci-requirements.txt pytest playwright
-      - name: Cache Chromium
-        id: chromium
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
-      - run: playwright install --with-deps chromium
-        if: steps.chromium.outputs.cache-hit != 'true'
-      - run: playwright install-deps chromium
-        if: steps.chromium.outputs.cache-hit == 'true'
-      - run: python tests/ssh_fixture/make_keys.py
-      - name: Start test databases and SSH server
-        run: docker compose -f docker-compose.test.yml up -d --wait mysql postgres mongodb redis cassandra sqlserver oracle sshd
-      # Two runs: both folders have a conftest.py that tests import by name, which clash in one pytest process.
-      - run: python -m pytest tests/integration -q
-      - run: python -m pytest $DOCKER_E2E -q
-      - name: Show database logs on failure
-        if: failure()
-        run: docker compose -f docker-compose.test.yml logs --tail=80
+  # The apps for every platform, built the way a release builds them, so a change that breaks packaging is caught in review.
+  build:
+    name: Build
+    needs: changes
+    if: needs.changes.outputs.packaging == 'true'
+    uses: ./.github/workflows/build-apps.yml
 
-  browser:
-    name: Browser tests
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: pip
-      - run: |
-          grep -v '^pywebview' requirements.txt > ci-requirements.txt
-          pip install -r ci-requirements.txt pytest playwright pytest-xdist
-      - name: Cache Chromium
-        id: chromium
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
-      - run: playwright install --with-deps chromium
-        if: steps.chromium.outputs.cache-hit != 'true'
-      - run: playwright install-deps chromium
-        if: steps.chromium.outputs.cache-hit == 'true'
-      # Each worker starts its own app server on a free port with its own data folder, so two workers do not share state.
-      # Two, not more: browsers compete for CPU on a 4-core runner, and starved tests are what made them flaky.
-      - run: python -m pytest tests/e2e -n 2 -q $(for f in $DOCKER_E2E; do printf -- '--ignore=%s ' "$f"; done)
+  linux-tests:
+    name: Linux tests
+    uses: ./.github/workflows/tests-os.yml
+    with:
+      runner: ubuntu-latest
 
-  windows:
-    name: Windows (unit and browser tests)
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: pip
-      - run: |
-          grep -v '^pywebview' requirements.txt > ci-requirements.txt
-          pip install -r ci-requirements.txt pytest playwright pytest-xdist
-      - run: python -m pytest tests --ignore=tests/e2e --ignore=tests/integration -q
-      - run: playwright install chromium
-      # the browser tests that need no Docker database; a different folder layout, path separators and file locking
-      # than Linux and macOS are exactly what this job is for
-      - run: python -m pytest tests/e2e -n 2 -q $(for f in $DOCKER_E2E; do printf -- '--ignore=%s ' "$f"; done)
+  windows-tests:
+    name: Windows tests
+    uses: ./.github/workflows/tests-os.yml
+    with:
+      runner: windows-latest
+
+  database-tests:
+    name: Database tests
+    uses: ./.github/workflows/tests-databases.yml
