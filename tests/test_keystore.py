@@ -166,3 +166,13 @@ def test_internal_ciphertext_field_never_reaches_the_browser(client, monkeypatch
     monkeypatch.setattr(db, '_key_cache', Fernet.generate_key())
     body = client.get('/api/connections').get_data(as_text=True)
     assert '_unreadable_secrets' not in body and 'gAAAA' not in body
+
+
+def test_the_names_that_locate_saved_connections_and_passwords_survive_the_rebrand(monkeypatch):
+    """The app is called Cairn, but the data folder and keychain entry keep the old name: renaming them would hide every
+    existing user's connections and make their saved passwords unreadable."""
+    assert db.APP_NAME == 'Cairn'
+    assert db.STORAGE_NAME == 'DB Visualizer'
+    assert db.KEY_SERVICE == 'DB Visualizer'
+    monkeypatch.delenv('DBV_DATA_DIR', raising=False)                           # the real, per-user location
+    assert db._data_dir().name == 'DB Visualizer'

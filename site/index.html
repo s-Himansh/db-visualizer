@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DB Visualizer: browse and edit your databases</title>
-<meta name="description" content="A free desktop app for SQLite, MySQL, PostgreSQL, SQL Server, Oracle, MongoDB, Redis and Cassandra. Follow the links between tables and change data without being afraid of it. Download and open, nothing to install.">
+<title>Cairn: find your way around any database</title>
+<meta name="description" content="Cairn is a free desktop app for SQLite, MySQL, PostgreSQL, SQL Server, Oracle, MongoDB, Redis and Cassandra. Follow a value to the row it points at, see how tables connect, and change data without being afraid of it. Download and open, nothing to install.">
 <meta name="color-scheme" content="light dark">
-<meta property="og:title" content="DB Visualizer">
-<meta property="og:description" content="Look at your data, follow its relationships, and change it without being afraid of it.">
+<meta property="og:title" content="Cairn: find your way around any database">
+<meta property="og:description" content="Follow a value to the row it points at, see how tables connect, and change data without being afraid of it.">
 <meta property="og:image" content="img/grid-sky.png">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231f6fd0'/%3E%3Cpath d='M8 11h16M8 16h16M8 21h16' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="img/cairn.svg">
 <link rel="stylesheet" href="fonts.css">
 <link rel="stylesheet" href="style.css">
 <link rel="preload" href="fonts/bricolage-grotesque-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -18,21 +18,22 @@
 
 <div class="wrap">
   <header class="bar">
-    <a class="brand" href="#">DB Visualizer</a>
+    <a class="brand" href="#"><img src="img/cairn.svg" width="30" height="30" alt="">Cairn</a>
     <nav aria-label="Page">
+      <a href="#try">Try it</a>
       <a href="#features">What it does</a>
-      <a href="#download">Download</a>
       <a href="https://github.com/s-Himansh/db-visualizer">GitHub</a>
+      <a class="nav-get" href="#download">Download</a>
     </nav>
   </header>
 
   <main>
   <div class="hero">
-    <h1>Look at your data. Follow its relationships. Change it without being afraid of it.</h1>
-    <p class="lede">A free desktop app for SQLite, MySQL, PostgreSQL, SQL Server, Oracle, MongoDB, Redis and Cassandra. Download it, open it, and you're looking at a database. Nothing to install first.</p>
+    <h1>Find your way around any database.</h1>
+    <p class="lede">Cairn is a free desktop app for SQLite, MySQL, PostgreSQL, SQL Server, Oracle, MongoDB, Redis and Cassandra. Follow a value to the row it points at, see how your tables connect, and change data without being afraid of it.</p>
 
     <div class="get" id="get">
-      <a class="btn" id="get-btn" data-dl="mac-arm" href="https://github.com/s-Himansh/db-visualizer/releases/latest/download/DB-Visualizer-macOS-AppleSilicon.zip">
+      <a class="btn" id="get-btn" data-dl="mac-arm" href="https://github.com/s-Himansh/db-visualizer/releases/latest/download/Cairn-macOS-AppleSilicon.zip">
         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 3v10M5.5 9 10 13.5 14.5 9M4 17h12"/></svg>
         <span id="get-label">Download for macOS</span>
       </a>
@@ -45,9 +46,39 @@
 
     <picture class="shot">
       <source srcset="img/grid-obsidian.png" media="(prefers-color-scheme: dark)">
-      <img src="img/grid-sky.png" width="1360" height="840" alt="The orders table in DB Visualizer: paid and pending shown as coloured labels, links to related rows, and a bar at the bottom saying two unsaved changes with Save, Undo and Discard.">
+      <img src="img/grid-sky.png" width="1360" height="840" alt="The orders table in Cairn: paid and pending shown as coloured labels, links to related rows, and a bar at the bottom saying two unsaved changes with Save, Undo and Discard.">
     </picture>
   </div>
+
+  <section id="try" class="try" aria-labelledby="try-h">
+    <h2 id="try-h">Try the two things Cairn is built around</h2>
+    <p class="try-lede">This is a toy copy of an online shop. <b>Click an arrow</b> beside a customer to jump to that customer. <b>Click a total</b> and change it: nothing is saved until you say so.</p>
+
+    <div class="demo" id="demo">
+      <div class="demo-tables">
+        <div class="demo-pane">
+          <div class="demo-name">orders</div>
+          <table aria-label="Orders">
+            <thead><tr><th>id</th><th>customer_id</th><th class="num">total</th><th>status</th></tr></thead>
+            <tbody id="demo-orders"></tbody>
+          </table>
+        </div>
+        <div class="demo-pane">
+          <div class="demo-name">customers</div>
+          <table aria-label="Customers">
+            <thead><tr><th>id</th><th>name</th><th>country</th></tr></thead>
+            <tbody id="demo-customers"></tbody>
+          </table>
+        </div>
+      </div>
+      <p class="demo-live" id="demo-live" aria-live="polite">Nothing selected yet.</p>
+      <div class="demo-bar" id="demo-bar" hidden>
+        <b id="demo-count">1 unsaved change</b>
+        <button type="button" class="demo-save" id="demo-save">Save changes</button>
+        <button type="button" id="demo-undo">Undo</button>
+      </div>
+    </div>
+  </section>
 
   <section id="features" aria-labelledby="f1">
     <div class="row">
@@ -122,12 +153,22 @@
     </ul>
   </section>
 
+  <section class="name" aria-labelledby="name">
+    <div class="name-row">
+      <img src="img/cairn.svg" width="72" height="72" alt="">
+      <div>
+        <h2 id="name">Why "Cairn"?</h2>
+        <p>A cairn is a pile of stones that marks the way across ground nobody has mapped. That's the job here: arrows to follow, a map to see where you are, and a way back when you've gone too far. (It was called DB Visualizer before. Your saved connections carry over.)</p>
+      </div>
+    </div>
+  </section>
+
   <section id="download" aria-labelledby="dl">
     <h2 id="dl">Download</h2>
     <div class="all">
-      <div class="item"><div><b>macOS, Apple Silicon</b><small>M1 and newer <span data-size="mac-arm"></span></small></div><a class="btn" data-dl="mac-arm" href="https://github.com/s-Himansh/db-visualizer/releases/latest/download/DB-Visualizer-macOS-AppleSilicon.zip">Download</a></div>
-      <div class="item"><div><b>macOS, Intel</b><small>Macs from before late 2020 <span data-size="mac-intel"></span></small></div><a class="btn quiet" data-dl="mac-intel" href="https://github.com/s-Himansh/db-visualizer/releases/latest/download/DB-Visualizer-macOS-Intel.zip">Download</a></div>
-      <div class="item"><div><b>Windows</b><small>Windows 10 and 11 <span data-size="win"></span></small></div><a class="btn quiet" data-dl="win" href="https://github.com/s-Himansh/db-visualizer/releases/latest/download/DB-Visualizer-Windows.zip">Download</a></div>
+      <div class="item"><div><b>macOS, Apple Silicon</b><small>M1 and newer <span data-size="mac-arm"></span></small></div><a class="btn" data-dl="mac-arm" href="https://github.com/s-Himansh/db-visualizer/releases/latest/download/Cairn-macOS-AppleSilicon.zip">Download</a></div>
+      <div class="item"><div><b>macOS, Intel</b><small>Macs from before late 2020 <span data-size="mac-intel"></span></small></div><a class="btn quiet" data-dl="mac-intel" href="https://github.com/s-Himansh/db-visualizer/releases/latest/download/Cairn-macOS-Intel.zip">Download</a></div>
+      <div class="item"><div><b>Windows</b><small>Windows 10 and 11 <span data-size="win"></span></small></div><a class="btn quiet" data-dl="win" href="https://github.com/s-Himansh/db-visualizer/releases/latest/download/Cairn-Windows.zip">Download</a></div>
     </div>
 
     <h3 class="sub" id="first-launch">Expect a pop-up the first time you open it</h3>
@@ -136,10 +177,10 @@
       <div>
         <h3>On a Mac</h3>
         <ol>
-          <li>Open the zip, drag <b>DB Visualizer</b> to Applications, and open it.</li>
+          <li>Open the zip, drag <b>Cairn</b> to Applications, and open it.</li>
           <li>macOS 15 (Sequoia) and newer show a box with only <b>Done</b> and <b>Move to Trash</b>. Click <b>Done</b>. Don't move it to the Trash.</li>
           <li>Open <b>System Settings</b>, then <b>Privacy &amp; Security</b>, and scroll down to <b>Security</b>.</li>
-          <li>Next to "DB Visualizer was blocked", click <b>Open Anyway</b>, enter your password, and click <b>Open</b>.</li>
+          <li>Next to "Cairn was blocked", click <b>Open Anyway</b>, enter your password, and click <b>Open</b>.</li>
         </ol>
         <p class="fine" style="margin-top: 14px">On macOS 14 and older it's quicker: right-click the app, choose <b>Open</b>, then click <b>Open</b> in the box.</p>
       </div>
@@ -147,14 +188,14 @@
         <h3>On Windows</h3>
         <ol>
           <li>Right-click the zip and choose <b>Extract All</b>.</li>
-          <li>Open the folder and run <b>DB Visualizer</b>.</li>
+          <li>Open the folder and run <b>Cairn</b>.</li>
           <li>If Windows shows a blue box, click <b>More info</b>, then <b>Run anyway</b>.</li>
         </ol>
       </div>
     </div>
-    <p class="fine">Prefer one command? Or if a Mac says the app is damaged: that's the download quarantine, not the app. In Terminal, type the line below (with a space at the end), then drag <b>DB Visualizer</b> from Finder into the Terminal window so it fills in the path, press Return, and open the app again. The steps above aren't needed after this.</p>
+    <p class="fine">Prefer one command? Or if a Mac says the app is damaged: that's the download quarantine, not the app. In Terminal, type the line below (with a space at the end), then drag <b>Cairn</b> from Finder into the Terminal window so it fills in the path, press Return, and open the app again. The steps above aren't needed after this.</p>
     <pre class="narrow"><code>xattr -dr com.apple.quarantine </code></pre>
-    <p class="fine" style="margin-top: 10px">If the app is already in Applications, the whole thing is <code>xattr -dr com.apple.quarantine "/Applications/DB Visualizer.app"</code>.</p>
+    <p class="fine" style="margin-top: 10px">If the app is already in Applications, the whole thing is <code>xattr -dr com.apple.quarantine "/Applications/Cairn.app"</code>.</p>
     <p class="fine">Each release lists SHA-256 checksums on its <a href="https://github.com/s-Himansh/db-visualizer/releases/latest">release page</a>. There's no Linux build yet; see the Python option below.</p>
 
     <h3 class="sub" id="source">Or skip the pop-ups: run it with Python</h3>
@@ -179,7 +220,7 @@ python -m venv .venv
   </main>
 
   <footer>
-    <span>DB Visualizer <span id="version"></span></span>
+    <span>Cairn <span id="version"></span></span>
     <span><a href="https://github.com/s-Himansh/db-visualizer">Source on GitHub</a> &nbsp; <a href="https://github.com/s-Himansh/db-visualizer/issues">Report a problem</a></span>
   </footer>
 </div>

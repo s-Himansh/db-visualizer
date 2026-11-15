@@ -33,9 +33,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { os: macos-latest, label: macOS (Apple Silicon), file: DB-Visualizer-macOS-AppleSilicon }
-          - { os: macos-15-intel, label: macOS (Intel), file: DB-Visualizer-macOS-Intel }
-          - { os: windows-latest, label: Windows, file: DB-Visualizer-Windows }
+          - { os: macos-latest, label: macOS (Apple Silicon), file: Cairn-macOS-AppleSilicon }
+          - { os: macos-15-intel, label: macOS (Intel), file: Cairn-macOS-Intel }
+          - { os: windows-latest, label: Windows, file: Cairn-Windows }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -51,7 +51,7 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install -r requirements-dev.txt
-          python -m PyInstaller --noconfirm --clean --windowed --name "DB Visualizer" `
+          python -m PyInstaller --noconfirm --clean --windowed --name "Cairn" --icon packaging/cairn.ico `
             --add-data "static;static" --collect-submodules db_connectors `
             --collect-all cassandra --collect-all pymssql --collect-submodules keyring `
             --collect-submodules anthropic --copy-metadata keyring db.py
@@ -60,22 +60,22 @@ jobs:
       - name: Check the built app starts (macOS)
         if: runner.os == 'macOS'
         run: |
-          "dist/DB Visualizer.app/Contents/MacOS/DB Visualizer" --self-check | tee check.txt
+          "dist/Cairn.app/Contents/MacOS/Cairn" --self-check | tee check.txt
           grep -q "self-check ok" check.txt
       - name: Check the built app starts (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $p = Start-Process -FilePath "dist\DB Visualizer\DB Visualizer.exe" -ArgumentList "--self-check" -Wait -PassThru
+          $p = Start-Process -FilePath "dist\Cairn\Cairn.exe" -ArgumentList "--self-check" -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "self-check exited with $($p.ExitCode)" }
 
       - name: Zip it (macOS)
         if: runner.os == 'macOS'
-        run: ditto -c -k --sequesterRsrc --keepParent "dist/DB Visualizer.app" "${{ matrix.file }}.zip"
+        run: ditto -c -k --sequesterRsrc --keepParent "dist/Cairn.app" "${{ matrix.file }}.zip"
       - name: Zip it (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Compress-Archive -Path "dist\DB Visualizer" -DestinationPath "${{ matrix.file }}.zip"
+        run: Compress-Archive -Path "dist\Cairn" -DestinationPath "${{ matrix.file }}.zip"
 
       - uses: actions/upload-artifact@v4
         with:
@@ -101,5 +101,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" *.zip SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" \
-            --title "DB Visualizer $GITHUB_REF_NAME" --generate-notes \
+            --title "Cairn $GITHUB_REF_NAME" --generate-notes \
             --notes "These builds are not signed yet, so the first launch needs one confirmation. macOS 15 and newer: click Done, then System Settings > Privacy & Security > Open Anyway. Older macOS: right-click the app and choose Open. Windows: More info, then Run anyway. Details: https://s-himansh.github.io/db-visualizer/"

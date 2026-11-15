@@ -122,5 +122,5 @@ jobs:
       - run: ./build.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: DB-Visualizer-macOS-unsigned
-          path: dist/DB Visualizer.app
+          name: Cairn-macOS-unsigned
+          path: dist/Cairn.app
