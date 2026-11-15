@@ -12,34 +12,40 @@ permissions:
 
 jobs:
   test:
-    name: Tests before publishing
+    name: Release / Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Check out the code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: pip
-      - run: python -m pip install -r requirements-dev.txt
-      - run: python -m pytest -q tests --ignore=tests/e2e --ignore=tests/integration
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Run the unit tests
+        run: python -m pytest -q tests --ignore=tests/e2e --ignore=tests/integration
 
   # Starts at once, alongside the tests; only publishing waits for both.
   build:
+    name: Build
     uses: ./.github/workflows/build-apps.yml
 
   publish:
-    name: Publish the release
+    name: Release / Publish
     needs: [test, build]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Collect the built files
+        uses: actions/download-artifact@v4
         with:
           merge-multiple: true
-      - name: Checksums
+      - name: Write the checksums
         run: sha256sum *.zip *.dmg | tee SHA256SUMS.txt
-      - name: Create the release
+      - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

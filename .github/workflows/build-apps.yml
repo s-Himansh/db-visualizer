@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    name: Build for ${{ matrix.label }}
+    name: ${{ matrix.label }}                        # shown as  Build / <platform>  (the caller names the group)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -22,8 +22,10 @@ jobs:
           - { os: macos-15-intel, label: macOS (Intel), file: Cairn-macOS-Intel, ext: dmg }
           - { os: windows-latest, label: Windows, file: Cairn-Windows, ext: zip }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Check out the code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
@@ -61,12 +63,13 @@ jobs:
         run: |
           python -m pip install dmgbuild
           dmgbuild -s packaging/dmg_settings.py -D app="dist/Cairn.app" "Cairn" "${{ matrix.file }}.dmg"
-      - name: Zip it (Windows)
+      - name: Zip the app (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: Compress-Archive -Path "dist\Cairn" -DestinationPath "${{ matrix.file }}.zip"
 
-      - uses: actions/upload-artifact@v4
+      - name: Keep the file for the next job
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.file }}
           path: ${{ matrix.file }}.${{ matrix.ext }}

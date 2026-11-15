@@ -11,28 +11,39 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Browser tests that talk to the Docker databases or the SSH server; every other e2e file runs in the `browser` jobs.
+# Browser tests that talk to the Docker databases or the SSH server; every other e2e file runs in the Tests / Browser jobs.
 env:
   DOCKER_E2E: tests/e2e/test_real_db_saving.py tests/e2e/test_ui.py tests/e2e/test_ssh_ui.py tests/e2e/test_nosql_ui.py
 
-# How the work is divided. The wait on a pull request is the slowest single job, so the long suites are cut into chunks that
-# run side by side on separate machines. (More workers on ONE machine made the browser tests flaky: Chromium instances starve
-# each other of CPU. More machines does not.)
+# The checks are named  Group / Kind / Where  so that related ones sit together in the list:
+#
+#   Checks / Packaging changed?                        (decides whether the Build group runs)
+#   Build  / macOS (Apple Silicon) | macOS (Intel) | Windows      (only when packaging changed)
+#   Tests  / Unit      / Linux | Windows
+#   Tests  / Browser   / Linux (1 of 3) ... | Windows (1 of 3) ...
+#   Tests  / Databases / SQL | SQL in the browser | MongoDB, Redis, Cassandra
+#
+# The wait on a pull request is the slowest single job, so the long suites are cut into chunks that run side by side on
+# separate machines. (More workers on ONE machine made the browser tests flaky: Chromium instances starve each other of CPU.
+# More machines does not.) Steps inside a job are named the same way everywhere: "Check out the code", "Set up Python",
+# "Install dependencies", then what it runs.
 jobs:
-  # Did this pull request change anything that gets packaged into the apps: the build scripts, the code and drivers that
-  # are bundled, the requirements? Only then is it worth building the apps (below).
+  # ---- Checks ---------------------------------------------------------------------------------------------------------
   changes:
-    name: Does it touch the packaging?
+    name: Checks / Packaging changed?
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
       packaging: ${{ steps.diff.outputs.packaging }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out the code
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - id: diff
+      # Anything that gets packaged into the apps: the build scripts, the code and drivers that are bundled, the requirements.
+      - name: Compare with the target branch
+        id: diff
         run: |
           if git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.sha }}" \
              | grep -qE '^(\.github/workflows/(ci|build-apps|release)\.yml|build\.sh|packaging/|db\.py|db_connectors/|requirements[^/]*\.txt)'; then
@@ -41,35 +52,135 @@ jobs:
             echo "packaging=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # The apps for every platform, built the way a release builds them (the Build the apps workflow), so a change that breaks
-  # packaging is caught in review. It runs inside this CI run, so a pull request shows one run.
-  packaging:
-    name: Apps
+  # ---- Build ----------------------------------------------------------------------------------------------------------
+  # The apps for every platform, built the way a release builds them (build-apps.yml), so a change that breaks packaging is
+  # caught in review. It runs inside this CI run, so a pull request shows one run.
+  build:
+    name: Build
     needs: changes
     if: needs.changes.outputs.packaging == 'true'
     uses: ./.github/workflows/build-apps.yml
 
-  unit:
-    name: Unit and API tests
+  # ---- Tests: unit ----------------------------------------------------------------------------------------------------
+  unit-linux:
+    name: Tests / Unit / Linux
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Check out the code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: pip
       # pywebview is only for the desktop window (it needs GTK/Qt on Linux); the tests drive the web app directly.
-      - run: |
+      - name: Install dependencies
+        run: |
           grep -v '^pywebview' requirements.txt > ci-requirements.txt
           pip install -r ci-requirements.txt pytest
-      - run: python -m pytest tests --ignore=tests/e2e --ignore=tests/integration -q
+      - name: Run the unit tests
+        run: python -m pytest tests --ignore=tests/e2e --ignore=tests/integration -q
 
-  # The real databases, in three chunks. Each chunk starts only the servers its tests use (Oracle and Cassandra take the
-  # longest to come up, and no chunk waits for both), then runs its share. DBV_TEST_PART (see tests/integration/conftest.py)
-  # puts every integration test in exactly one of the two parts.
-  integration:
-    name: Real databases (${{ matrix.part }})
+  unit-windows:
+    name: Tests / Unit / Windows
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          grep -v '^pywebview' requirements.txt > ci-requirements.txt
+          pip install -r ci-requirements.txt pytest
+      - name: Run the unit tests
+        run: python -m pytest tests --ignore=tests/e2e --ignore=tests/integration -q
+
+  # ---- Tests: browser, no database ------------------------------------------------------------------------------------
+  # The browser tests that need no Docker database, in three chunks (pytest-split deals the tests out evenly).
+  browser-linux:
+    name: Tests / Browser / Linux (${{ matrix.group }} of 3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1, 2, 3]
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          grep -v '^pywebview' requirements.txt > ci-requirements.txt
+          pip install -r ci-requirements.txt pytest playwright pytest-xdist pytest-split
+      - name: Restore the Chromium cache
+        id: chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+      - name: Install Chromium
+        if: steps.chromium.outputs.cache-hit != 'true'
+        run: playwright install --with-deps chromium
+      - name: Install Chromium's system libraries
+        if: steps.chromium.outputs.cache-hit == 'true'
+        run: playwright install-deps chromium
+      # Each worker starts its own app server on a free port with its own data folder, so two workers do not share state.
+      - name: Run the browser tests (chunk ${{ matrix.group }} of 3)
+        run: >
+          python -m pytest tests/e2e -n 2 -q --splits 3 --group ${{ matrix.group }} --splitting-algorithm least_duration
+          $(for f in $DOCKER_E2E; do printf -- '--ignore=%s ' "$f"; done)
+
+  # A different folder layout, path separators and file locking than Linux and macOS are exactly what this is for.
+  browser-windows:
+    name: Tests / Browser / Windows (${{ matrix.group }} of 3)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1, 2, 3]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install dependencies
+        run: |
+          grep -v '^pywebview' requirements.txt > ci-requirements.txt
+          pip install -r ci-requirements.txt pytest playwright pytest-xdist pytest-split
+      - name: Install Chromium
+        run: playwright install chromium
+      - name: Run the browser tests (chunk ${{ matrix.group }} of 3)
+        run: >
+          python -m pytest tests/e2e -n 2 -q --splits 3 --group ${{ matrix.group }} --splitting-algorithm least_duration
+          $(for f in $DOCKER_E2E; do printf -- '--ignore=%s ' "$f"; done)
+
+  # ---- Tests: real databases ------------------------------------------------------------------------------------------
+  # In three chunks. Each starts only the servers its tests use (Oracle and Cassandra take the longest to come up, and no
+  # chunk waits for both), then runs its share. DBV_TEST_PART (see tests/integration/conftest.py) puts every integration
+  # test in exactly one of the two parts.
+  databases:
+    name: Tests / Databases / ${{ matrix.part }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
@@ -87,121 +198,50 @@ jobs:
             integration: nosql
             browser: tests/e2e/test_nosql_ui.py
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Check out the code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: pip
-      - run: |
+      - name: Install dependencies
+        run: |
           grep -v '^pywebview' requirements.txt > ci-requirements.txt
           pip install -r ci-requirements.txt pytest playwright
-      - name: Cache Chromium
+      - name: Restore the Chromium cache
         if: matrix.browser
         id: chromium
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
-      - run: playwright install --with-deps chromium
+      - name: Install Chromium
         if: matrix.browser && steps.chromium.outputs.cache-hit != 'true'
-      - run: playwright install-deps chromium
+        run: playwright install --with-deps chromium
+      - name: Install Chromium's system libraries
         if: matrix.browser && steps.chromium.outputs.cache-hit == 'true'
-      - run: python tests/ssh_fixture/make_keys.py
+        run: playwright install-deps chromium
+      - name: Create the SSH test keys
         if: contains(matrix.services, 'sshd')
-      - name: Start test databases
+        run: python tests/ssh_fixture/make_keys.py
+      - name: Start the test databases
         run: docker compose -f docker-compose.test.yml up -d --wait ${{ matrix.services }}
       # A test whose database is not up SKIPS rather than fails, so a chunk missing a server would go green having tested
       # nothing. Every such skip says "not running", and any of them here fails the step.
       # Two runs: both folders have a conftest.py that tests import by name, which clash in one pytest process.
-      - name: Integration tests
+      - name: Run the integration tests
         if: matrix.integration
         run: |
           set -o pipefail
           DBV_TEST_PART=${{ matrix.integration }} python -m pytest tests/integration -q -rs | tee out.txt
           if grep -q "not running" out.txt; then echo "::error::a test database was not up, so its tests were skipped"; exit 1; fi
-      - name: Browser tests on real databases
+      - name: Run the browser tests on real databases
         if: matrix.browser
         run: |
           set -o pipefail
           python -m pytest ${{ matrix.browser }} -q -rs | tee out.txt
           if grep -q "not running" out.txt; then echo "::error::a test database was not up, so its tests were skipped"; exit 1; fi
-      - name: Show database logs on failure
+      - name: Show the database logs
         if: failure()
         run: docker compose -f docker-compose.test.yml logs --tail=80
-
-  # The browser tests that need no Docker database, in three chunks (pytest-split deals the tests out evenly).
-  browser:
-    name: Browser tests (${{ matrix.group }} of 3)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        group: [1, 2, 3]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: pip
-      - run: |
-          grep -v '^pywebview' requirements.txt > ci-requirements.txt
-          pip install -r ci-requirements.txt pytest playwright pytest-xdist pytest-split
-      - name: Cache Chromium
-        id: chromium
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
-      - run: playwright install --with-deps chromium
-        if: steps.chromium.outputs.cache-hit != 'true'
-      - run: playwright install-deps chromium
-        if: steps.chromium.outputs.cache-hit == 'true'
-      # Each worker starts its own app server on a free port with its own data folder, so two workers do not share state.
-      - run: >
-          python -m pytest tests/e2e -n 2 -q --splits 3 --group ${{ matrix.group }} --splitting-algorithm least_duration
-          $(for f in $DOCKER_E2E; do printf -- '--ignore=%s ' "$f"; done)
-
-  windows-unit:
-    name: Windows (unit tests)
-    runs-on: windows-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: pip
-      - run: |
-          grep -v '^pywebview' requirements.txt > ci-requirements.txt
-          pip install -r ci-requirements.txt pytest
-      - run: python -m pytest tests --ignore=tests/e2e --ignore=tests/integration -q
-
-  # A different folder layout, path separators and file locking than Linux and macOS are exactly what this is for.
-  windows-browser:
-    name: Windows (browser tests ${{ matrix.group }} of 3)
-    runs-on: windows-latest
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false
-      matrix:
-        group: [1, 2, 3]
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: pip
-      - run: |
-          grep -v '^pywebview' requirements.txt > ci-requirements.txt
-          pip install -r ci-requirements.txt pytest playwright pytest-xdist pytest-split
-      - run: playwright install chromium
-      - run: >
-          python -m pytest tests/e2e -n 2 -q --splits 3 --group ${{ matrix.group }} --splitting-algorithm least_duration
-          $(for f in $DOCKER_E2E; do printf -- '--ignore=%s ' "$f"; done)
