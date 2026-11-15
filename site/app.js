@@ -5,7 +5,8 @@
   const BUILDS = {
     'mac-arm': { file: 'Cairn-macOS-AppleSilicon.dmg', label: 'Download for macOS', short: 'macOS (Apple Silicon)' },
     'mac-intel': { file: 'Cairn-macOS-Intel.dmg', label: 'Download for macOS (Intel)', short: 'macOS (Intel)' },
-    win: { file: 'Cairn-Windows.zip', label: 'Download for Windows', short: 'Windows' }
+    win: { file: 'Cairn-Windows.zip', label: 'Download for Windows', short: 'Windows' },
+    linux: { file: 'Cairn-Linux-x86_64.tar.gz', label: 'Download for Linux', short: 'Linux' }
   };
   const $ = (sel) => document.querySelector(sel);
   const button = $('#get-btn'), label = $('#get-label'), note = $('#get-note'), other = $('#other');
@@ -21,6 +22,8 @@
       } catch (e) { /* not available */ }
       return 'mac-arm';
     }
+    if (/CrOS/i.test(ua)) return 'other';                      // Chromebooks can't run it
+    if (/Linux|X11/i.test(ua)) return /aarch64|arm/i.test(ua) ? 'linux-arm' : 'linux';   // the Linux build is for x86-64 PCs
     return 'other';
   }
 
@@ -39,7 +42,9 @@
       label.textContent = 'See the downloads';
       note.textContent = key === 'phone'
         ? 'Cairn is a desktop app. Open this page on your computer to download it.'
-        : 'There is no Linux build yet. You can run it from source, or download for a Mac or Windows.';
+        : key === 'linux-arm'
+          ? 'The Linux build is for x86-64 computers, and this one looks like ARM. You can run Cairn from source instead.'
+          : 'There is no build for this computer yet. You can run it from source, or download for a Mac, Windows or Linux.';
     }
   }
 

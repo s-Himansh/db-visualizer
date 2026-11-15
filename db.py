@@ -1897,6 +1897,8 @@ def self_check():
     opening a window. The release build runs it on every platform, because a missing bundled file only shows up frozen."""
     import webview, keyring                                              # noqa: F401  (importing them is the test)
     keyring.get_keyring()
+    if sys.platform.startswith('linux') and getattr(sys, 'frozen', False):
+        import qtpy, PySide6.QtWebEngineWidgets                          # noqa: F401  (the packaged Linux app carries its own web view)
     client = app.test_client()
     for url in ('/', '/static/js/tabs.js', '/static/fonts/instrument-sans-latin.woff2'):
         status = client.get(url).status_code
@@ -1924,4 +1926,13 @@ if __name__ == '__main__':
         fullscreen=False,
         min_size=(1000, 600)
     )
-    webview.start(debug=bool(os.environ.get('DBV_DEBUG')))
+    gui = None
+    if sys.platform.startswith('linux') and getattr(sys, 'frozen', False):
+        # The packaged Linux app carries Qt, so there is nothing to install (the GTK route needs system libraries). Chromium's
+        # own sandbox needs kernel features some distributions switch off for ordinary programs (Ubuntu 24.04 does), and
+        # without them the window never opens. This window only ever shows the app's own pages from 127.0.0.1, never the
+        # web, so it runs without that extra layer unless the user sets their own flags.
+        gui = 'qt'
+        os.environ.setdefault('QTWEBENGINE_CHROMIUM_FLAGS', '--no-sandbox')
+    icon = STATIC_DIR / 'cairn.png'
+    webview.start(gui=gui, debug=bool(os.environ.get('DBV_DEBUG')), icon=str(icon) if icon.exists() else None)

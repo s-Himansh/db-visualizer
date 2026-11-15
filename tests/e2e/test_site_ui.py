@@ -49,14 +49,19 @@ def test_windows_gets_the_windows_build(browser):
     assert pg.get_attribute('#get-btn', 'href').endswith('/Cairn-Windows.zip')
 
 
-def test_linux_and_phones_are_told_the_truth_instead_of_getting_a_wrong_file(browser):
+def test_linux_gets_the_linux_build_and_phones_and_arm_linux_are_told_the_truth(browser):
     linux = open_page(browser, LINUX)
-    linux.wait_for_function("document.getElementById('get-label').textContent === 'See the downloads'")
-    assert 'no Linux build' in linux.inner_text('#get-note')
-    assert linux.get_attribute('#get-btn', 'href') == '#download'
+    linux.wait_for_function("document.getElementById('get-label').textContent === 'Download for Linux'")
+    assert linux.get_attribute('#get-btn', 'href').endswith('/releases/latest/download/Cairn-Linux-x86_64.tar.gz')
+    arm = open_page(browser, LINUX.replace('x86_64', 'aarch64'))                 # we only build for x86-64 PCs: don't hand an ARM machine a wrong file
+    arm.wait_for_function("document.getElementById('get-label').textContent === 'See the downloads'")
+    assert 'ARM' in arm.inner_text('#get-note') and arm.get_attribute('#get-btn', 'href') == '#download'
     phone = open_page(browser, PHONE)
     phone.wait_for_function("document.getElementById('get-label').textContent === 'See the downloads'")
     assert 'desktop app' in phone.inner_text('#get-note')
+    android = open_page(browser, 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Mobile Safari/537.36')
+    android.wait_for_function("document.getElementById('get-label').textContent === 'See the downloads'")
+    assert 'desktop app' in android.inner_text('#get-note')                     # Android says "Linux" too, but it is not a desktop
 
 
 def test_the_version_sizes_and_exact_links_come_from_the_latest_release(browser):
