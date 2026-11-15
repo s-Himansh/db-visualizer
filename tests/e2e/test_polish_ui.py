@@ -26,17 +26,15 @@ def test_the_query_toolbar_has_the_same_export_control(connected):
 
 
 def test_with_many_tabs_the_active_one_is_always_in_view(connected):
+    in_view = """() => { const bar = document.getElementById('tabs-header').getBoundingClientRect();
+        const t = document.querySelector('.tab.active').getBoundingClientRect(); return t.left >= bar.left - 1 && t.right <= bar.right + 1; }"""
     for _ in range(12):
         connected.click('#new-query-tab-btn')
     connected.wait_for_function("document.querySelectorAll('.tab').length >= 13")
-    connected.wait_for_timeout(300)
-    inside = connected.evaluate("""() => { const bar = document.getElementById('tabs-header').getBoundingClientRect();
-        const t = document.querySelector('.tab.active').getBoundingClientRect(); return t.left >= bar.left - 1 && t.right <= bar.right + 1; }""")
-    assert inside
-    connected.click('.tab:first-child')                              # and going back to the first scrolls it into view too
-    connected.wait_for_timeout(300)
-    assert connected.evaluate("""() => { const bar = document.getElementById('tabs-header').getBoundingClientRect();
-        const t = document.querySelector('.tab.active').getBoundingClientRect(); return t.left >= bar.left - 1; }""")
+    connected.wait_for_function(in_view)                              # waits for the condition, not for a time: CI is slower than a laptop
+    connected.click('.tab:first-child')                               # and going back to the first scrolls it into view too
+    connected.wait_for_function("""() => { const bar = document.getElementById('tabs-header').getBoundingClientRect();
+        return document.querySelector('.tab.active').getBoundingClientRect().left >= bar.left - 1; }""")
 
 
 def test_the_new_connection_button_sits_in_the_search_row(connected):

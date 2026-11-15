@@ -149,12 +149,13 @@ def test_accepted_relationships_survive_a_reload(loose):
     find(loose)
     decide(loose, 'items.order_id', 'accept')
     loose.wait_for_selector('.tab-content.active .map-edge.is-inferred', state='attached')
+    # The app remembers what was open (saved a moment after each change) and reconnects it after a reload. Wait for the
+    # session to be saved, reload, and wait for the restore. Clicking "Connect" here instead raced with that restore:
+    # depending on timing the button said "Connect" or, once restored, "Disconnect", and the test could disconnect.
+    loose.wait_for_function("(JSON.parse(localStorage.getItem('db_visualizer_session') || '{}').connectedConnections || []).length > 0")
     loose.reload()
-    loose.wait_for_selector('#manage-connections-btn')
-    loose.click('#manage-connections-btn')
-    loose.click('.connection-item:has-text("Loose") .connect-btn')
     loose.wait_for_selector('#tables-content .tree-item')
-    loose.evaluate("document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'))")
+    loose.wait_for_function("!document.getElementById('open-map-btn').disabled")
     open_map(loose)
     loose.wait_for_selector('.tab-content.active .map-edge.is-inferred', state='attached')
 
