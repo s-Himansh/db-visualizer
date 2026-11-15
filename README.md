@@ -177,7 +177,7 @@ flowchart LR
 | UI | `static/js/` (`app`, `connection`, `query`, `tabs`, `ui`, `palette`, `relations`, `insights`, `assistant`) |
 | SQL assistant | `ai_assistant.py` |
 | Sample shop database | `sample_data.py` |
-| Your data | `~/Library/Application Support/DB Visualizer` (the folder keeps its old name on purpose, so existing installs keep their connections: saved connections, saved queries, accepted relationships, `app.log`, known SSH hosts) |
+| Your data | `~/Library/Application Support/DB Visualizer` (saved connections, saved queries, accepted relationships, `app.log`, known SSH hosts) |
 
 </details>
 
