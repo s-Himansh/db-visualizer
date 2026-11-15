@@ -82,6 +82,15 @@ kbd { font: 500 .8em var(--mono); background: var(--surface); box-shadow: inset 
 .launch code, .fine code { font: 13px var(--mono); background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); border-radius: 6px; padding: 2px 7px; word-break: break-all; }
 .fine { font-size: 15px; color: var(--muted); margin-top: 24px; max-width: 70ch; }
 
+/* the heads-up under the big button, and the sub-headings in the download section */
+.heads-up { margin: 22px 0 0; max-width: 62ch; font-size: 15px; color: var(--muted); padding-left: 14px; border-left: 3px solid var(--accent); }
+.heads-up a { color: var(--ink); text-underline-offset: 3px; }
+h3.sub { font: 600 21px var(--display); letter-spacing: -.01em; margin: 48px 0 0; scroll-margin-top: 20px; }
+h3.sub + .fine { margin-top: 8px; }
+pre { margin: 0; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); border-radius: 10px; padding: 14px 16px; overflow-x: auto; }
+pre.narrow { max-width: 70ch; margin-top: 12px; }
+pre code, .launch pre code { font: 13.5px/1.7 var(--mono); background: none; box-shadow: none; padding: 0; word-break: normal; white-space: pre; }
+
 /* all downloads */
 .all { margin-top: 28px; border-top: 1px solid var(--line); }
 .all .item { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; padding: 20px 0; border-bottom: 1px solid var(--line); }
@@ -96,6 +105,6 @@ footer a { text-underline-offset: 3px; }
 @media (max-width: 860px) {
   .row, .row.flip { grid-template-columns: 1fr; }
   .row.flip .text { order: 0; }
-  .trust li, .launch, .dbgroups { grid-template-columns: 1fr; }
+  .trust li, .launch, .dbgroups { grid-template-columns: minmax(0, 1fr); }
   .bar nav { gap: 18px; }
 }
