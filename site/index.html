@@ -152,8 +152,9 @@
         </ol>
       </div>
     </div>
-    <p class="fine">Prefer one command? Or if a Mac says the app is damaged: that's the download quarantine, not the app. Run this in Terminal and open it again, and the steps above aren't needed:</p>
-    <pre class="narrow"><code>xattr -dr com.apple.quarantine "/Applications/DB Visualizer.app"</code></pre>
+    <p class="fine">Prefer one command? Or if a Mac says the app is damaged: that's the download quarantine, not the app. In Terminal, type the line below (with a space at the end), then drag <b>DB Visualizer</b> from Finder into the Terminal window so it fills in the path, press Return, and open the app again. The steps above aren't needed after this.</p>
+    <pre class="narrow"><code>xattr -dr com.apple.quarantine </code></pre>
+    <p class="fine" style="margin-top: 10px">If the app is already in Applications, the whole thing is <code>xattr -dr com.apple.quarantine "/Applications/DB Visualizer.app"</code>.</p>
     <p class="fine">Each release lists SHA-256 checksums on its <a href="https://github.com/s-Himansh/db-visualizer/releases/latest">release page</a>. There's no Linux build yet; see the Python option below.</p>
 
     <h3 class="sub" id="source">Or skip the pop-ups: run it with Python</h3>
