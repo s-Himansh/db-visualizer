@@ -11,14 +11,18 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Browser tests that talk to the Docker databases or the SSH server; every other e2e file runs in the `browser` job.
+# Browser tests that talk to the Docker databases or the SSH server; every other e2e file runs in the `browser` jobs.
 env:
   DOCKER_E2E: tests/e2e/test_real_db_saving.py tests/e2e/test_ui.py tests/e2e/test_ssh_ui.py tests/e2e/test_nosql_ui.py
 
+# How the work is divided. The wait on a pull request is the slowest single job, so the long suites are cut into chunks that
+# run side by side on separate machines. (More workers on ONE machine made the browser tests flaky: Chromium instances starve
+# each other of CPU. More machines does not.)
 jobs:
   unit:
     name: Unit and API tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -31,9 +35,27 @@ jobs:
           pip install -r ci-requirements.txt pytest
       - run: python -m pytest tests --ignore=tests/e2e --ignore=tests/integration -q
 
+  # The real databases, in three chunks. Each chunk starts only the servers its tests use (Oracle and Cassandra take the
+  # longest to come up, and no chunk waits for both), then runs its share. The two `-k` filters are exact opposites, so every
+  # integration test runs exactly once.
   integration:
-    name: Real databases, SSH and their browser tests
+    name: Real databases (${{ matrix.part }})
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: SQL
+            services: mysql postgres sqlserver oracle sshd
+            integration: not (cassandra or mongodb or redis)
+          - part: SQL in the browser
+            services: mysql postgres sqlserver oracle sshd
+            browser: tests/e2e/test_real_db_saving.py tests/e2e/test_ui.py tests/e2e/test_ssh_ui.py
+          - part: MongoDB, Redis, Cassandra
+            services: mongodb redis cassandra
+            integration: cassandra or mongodb or redis
+            browser: tests/e2e/test_nosql_ui.py
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -44,28 +66,48 @@ jobs:
           grep -v '^pywebview' requirements.txt > ci-requirements.txt
           pip install -r ci-requirements.txt pytest playwright
       - name: Cache Chromium
+        if: matrix.browser
         id: chromium
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
       - run: playwright install --with-deps chromium
-        if: steps.chromium.outputs.cache-hit != 'true'
+        if: matrix.browser && steps.chromium.outputs.cache-hit != 'true'
       - run: playwright install-deps chromium
-        if: steps.chromium.outputs.cache-hit == 'true'
+        if: matrix.browser && steps.chromium.outputs.cache-hit == 'true'
       - run: python tests/ssh_fixture/make_keys.py
-      - name: Start test databases and SSH server
-        run: docker compose -f docker-compose.test.yml up -d --wait mysql postgres mongodb redis cassandra sqlserver oracle sshd
+        if: contains(matrix.services, 'sshd')
+      - name: Start test databases
+        run: docker compose -f docker-compose.test.yml up -d --wait ${{ matrix.services }}
+      # A test whose database is not up SKIPS rather than fails, so a chunk missing a server would go green having tested
+      # nothing. Every such skip says "not running", and any of them here fails the step.
       # Two runs: both folders have a conftest.py that tests import by name, which clash in one pytest process.
-      - run: python -m pytest tests/integration -q
-      - run: python -m pytest $DOCKER_E2E -q
+      - name: Integration tests
+        if: matrix.integration
+        run: |
+          set -o pipefail
+          python -m pytest tests/integration -q -rs -k "${{ matrix.integration }}" | tee out.txt
+          if grep -q "not running" out.txt; then echo "::error::a test database was not up, so its tests were skipped"; exit 1; fi
+      - name: Browser tests on real databases
+        if: matrix.browser
+        run: |
+          set -o pipefail
+          python -m pytest ${{ matrix.browser }} -q -rs | tee out.txt
+          if grep -q "not running" out.txt; then echo "::error::a test database was not up, so its tests were skipped"; exit 1; fi
       - name: Show database logs on failure
         if: failure()
         run: docker compose -f docker-compose.test.yml logs --tail=80
 
+  # The browser tests that need no Docker database, in three chunks (pytest-split deals the tests out evenly).
   browser:
-    name: Browser tests
+    name: Browser tests (${{ matrix.group }} of 3)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -74,7 +116,7 @@ jobs:
           cache: pip
       - run: |
           grep -v '^pywebview' requirements.txt > ci-requirements.txt
-          pip install -r ci-requirements.txt pytest playwright pytest-xdist
+          pip install -r ci-requirements.txt pytest playwright pytest-xdist pytest-split
       - name: Cache Chromium
         id: chromium
         uses: actions/cache@v4
@@ -86,12 +128,14 @@ jobs:
       - run: playwright install-deps chromium
         if: steps.chromium.outputs.cache-hit == 'true'
       # Each worker starts its own app server on a free port with its own data folder, so two workers do not share state.
-      # Two, not more: browsers compete for CPU on a 4-core runner, and starved tests are what made them flaky.
-      - run: python -m pytest tests/e2e -n 2 -q $(for f in $DOCKER_E2E; do printf -- '--ignore=%s ' "$f"; done)
+      - run: >
+          python -m pytest tests/e2e -n 2 -q --splits 3 --group ${{ matrix.group }} --splitting-algorithm least_duration
+          $(for f in $DOCKER_E2E; do printf -- '--ignore=%s ' "$f"; done)
 
-  windows:
-    name: Windows (unit and browser tests)
+  windows-unit:
+    name: Windows (unit tests)
     runs-on: windows-latest
+    timeout-minutes: 15
     defaults:
       run:
         shell: bash
@@ -103,9 +147,31 @@ jobs:
           cache: pip
       - run: |
           grep -v '^pywebview' requirements.txt > ci-requirements.txt
-          pip install -r ci-requirements.txt pytest playwright pytest-xdist
+          pip install -r ci-requirements.txt pytest
       - run: python -m pytest tests --ignore=tests/e2e --ignore=tests/integration -q
+
+  # A different folder layout, path separators and file locking than Linux and macOS are exactly what this is for.
+  windows-browser:
+    name: Windows (browser tests ${{ matrix.group }} of 3)
+    runs-on: windows-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1, 2, 3]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: |
+          grep -v '^pywebview' requirements.txt > ci-requirements.txt
+          pip install -r ci-requirements.txt pytest playwright pytest-xdist pytest-split
       - run: playwright install chromium
-      # the browser tests that need no Docker database; a different folder layout, path separators and file locking
-      # than Linux and macOS are exactly what this job is for
-      - run: python -m pytest tests/e2e -n 2 -q $(for f in $DOCKER_E2E; do printf -- '--ignore=%s ' "$f"; done)
+      - run: >
+          python -m pytest tests/e2e -n 2 -q --splits 3 --group ${{ matrix.group }} --splitting-algorithm least_duration
+          $(for f in $DOCKER_E2E; do printf -- '--ignore=%s ' "$f"; done)
