@@ -92,8 +92,9 @@ jobs:
       - name: Pack the app (Linux)
         if: runner.os == 'Linux'
         run: tar czf "${{ matrix.file }}.tar.gz" -C dist Cairn           # a tarball keeps the "may run" permission a zip would drop
-      # The faithful test: a fresh Ubuntu with only what every Linux desktop has (a virtual screen and the graphics libraries that
-      # come with the driver: EGL and OpenGL, which PyInstaller deliberately does not bundle) and nothing else, which is what the
+      # The faithful test: a fresh Ubuntu with only what every Linux desktop has (a virtual screen, Mesa's graphics libraries, which
+      # pull in the Wayland ones, and the cursor library every GTK desktop carries; PyInstaller deliberately does not bundle these
+      # because they must match the desktop's own graphics stack) and nothing else, which is what the
       # person who downloads this starts from. This build machine has many packages a real desktop might lack. It lists any
       # library the bundle needs that the system does not have, runs the built-in check, then opens the real window for a few
       # seconds: a missing library or a web view that cannot start shows up here, not in a user's hands.
@@ -103,7 +104,7 @@ jobs:
           docker run --rm -v "$PWD:/in:ro" ubuntu:24.04 bash -c '
             set -e
             apt-get update -qq
-            apt-get install -y -qq --no-install-recommends xvfb xauth libegl1 libgl1 libgl1-mesa-dri >/dev/null
+            apt-get install -y -qq --no-install-recommends xvfb xauth libegl1 libgl1 libegl-mesa0 libgl1-mesa-dri libwayland-cursor0 >/dev/null
             mkdir /t && tar xzf /in/${{ matrix.file }}.tar.gz -C /t && cd /t/Cairn
             echo "--- libraries the bundle needs that this system lacks (none is best):"
             # (ldd is told where the bundle keeps its own libraries, and only the Qt files are checked)
