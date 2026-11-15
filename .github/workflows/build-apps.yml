@@ -113,7 +113,7 @@ jobs:
           docker run --rm -v "$PWD:/in:ro" ubuntu:24.04 bash -c '
             set -e
             apt-get update -qq
-            apt-get install -y -qq --no-install-recommends xvfb xauth libegl1 libgl1 libegl-mesa0 libgl1-mesa-dri >/dev/null
+            apt-get install -y -qq --no-install-recommends xvfb xauth libegl1 libgl1 libegl-mesa0 libglx-mesa0 libgl1-mesa-dri >/dev/null
             mkdir /t && tar xzf /in/${{ matrix.file }}.tar.gz -C /t && cd /t/Cairn
             echo "--- libraries the bundle needs that this system lacks (none is best):"
             # (ldd is told where the bundle keeps its own libraries, and only the Qt files are checked)
