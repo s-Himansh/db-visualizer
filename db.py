@@ -1892,6 +1892,22 @@ def shutdown():
         connector.close_tunnel()
 
 
+def linux_web_view_defaults(env):
+    """The environment the packaged Linux app starts its web view with. Nothing the user has set is overridden.
+
+    The packaged app carries Qt, so there is nothing to install (the GTK route needs system libraries). Chromium's own sandbox needs
+    kernel features some distributions switch off for ordinary programs (Ubuntu 24.04 does), and without them the window never
+    opens; this window only ever shows the app's own pages from 127.0.0.1, never the web, so it runs without that extra layer.
+    OpenGL is off by default: the app is a data grid and forms, which draw fine in software, and software drawing works on machines
+    with no or broken GL (virtual machines, remote desktops, some drivers), where GLX otherwise aborts the program with
+    'Could not initialize GLX'. Setting DBV_GPU=1 turns hardware drawing back on."""
+    gpu = bool(env.get('DBV_GPU'))
+    env.setdefault('QTWEBENGINE_CHROMIUM_FLAGS', '--no-sandbox' + ('' if gpu else ' --disable-gpu'))
+    if not gpu:
+        env.setdefault('QT_QUICK_BACKEND', 'software')
+        env.setdefault('QT_XCB_GL_INTEGRATION', 'none')
+
+
 def self_check():
     """`Cairn --self-check`: prove a packaged build is whole (window library, keychain, pages, fonts) without
     opening a window. The release build runs it on every platform, because a missing bundled file only shows up frozen."""
@@ -1928,11 +1944,7 @@ if __name__ == '__main__':
     )
     gui = None
     if sys.platform.startswith('linux') and getattr(sys, 'frozen', False):
-        # The packaged Linux app carries Qt, so there is nothing to install (the GTK route needs system libraries). Chromium's
-        # own sandbox needs kernel features some distributions switch off for ordinary programs (Ubuntu 24.04 does), and
-        # without them the window never opens. This window only ever shows the app's own pages from 127.0.0.1, never the
-        # web, so it runs without that extra layer unless the user sets their own flags.
         gui = 'qt'
-        os.environ.setdefault('QTWEBENGINE_CHROMIUM_FLAGS', '--no-sandbox')
+        linux_web_view_defaults(os.environ)
     icon = STATIC_DIR / 'cairn.png'
     webview.start(gui=gui, debug=bool(os.environ.get('DBV_DEBUG')), icon=str(icon) if icon.exists() else None)
