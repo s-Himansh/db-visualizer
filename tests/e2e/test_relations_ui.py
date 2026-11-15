@@ -328,15 +328,17 @@ def test_everything_including_the_lanes_is_in_view_after_fit(tangled):
 # ---- grid layout -------------------------------------------------------------------------------------------------
 
 def test_a_link_arrow_sits_next_to_its_value_not_across_the_screen(linked):
-    cell = linked.locator('.tab-content.active tr[data-row-index="0"] td[data-column=id]').bounding_box()
-    assert cell['width'] < 110           # a column holding a number is as wide as that number needs, not 150px
+    # the grid fills the screen, so a column can be wide; what matters is the arrow stays beside its (right-aligned) value
+    gap = linked.evaluate("""() => { const td = document.querySelector('.tab-content.active tr[data-row-index="0"] td[data-column=id]');
+        const r = document.createRange(); r.selectNodeContents(td); return td.getBoundingClientRect().right - r.getBoundingClientRect().right; }""")
+    assert gap < 40, gap
 
 
-def test_long_text_still_gets_room_and_short_columns_stay_narrow(connected):
+def test_long_text_still_gets_more_room_than_short_columns(connected):
     open_table(connected, 'customers')
     widths = connected.evaluate("""() => Object.fromEntries([...document.querySelectorAll('.tab-content.active thead th[data-col]')]
         .map(th => [th.dataset.col, th.getBoundingClientRect().width]))""")
-    assert widths['id'] < 110 and widths['email'] > 1.4 * widths['id']
+    assert widths['email'] > 1.4 * widths['id']          # the free width is shared by need: email gets far more than id
 
 
 def test_all_columns_shows_every_column_and_primary_keys(map_open):
