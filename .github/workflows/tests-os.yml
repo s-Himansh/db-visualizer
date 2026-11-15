@@ -39,7 +39,7 @@ jobs:
       - name: Install dependencies
         run: |
           grep -v '^pywebview' requirements.txt > ci-requirements.txt
-          pip install -r ci-requirements.txt pytest
+          pip install -r ci-requirements.txt pytest pyyaml
       - name: Run the unit tests
         run: python -m pytest tests --ignore=tests/e2e --ignore=tests/integration -q
 

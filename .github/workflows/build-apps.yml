@@ -106,7 +106,7 @@ jobs:
             apt-get install -y -qq --no-install-recommends xvfb xauth libegl1 libgl1 libgl1-mesa-dri >/dev/null
             mkdir /t && tar xzf /in/${{ matrix.file }}.tar.gz -C /t && cd /t/Cairn
             echo "--- libraries the bundle needs that this system lacks (none is best):"
-            # (ldd is told where the bundle keeps its own libraries, and only Qt's own files are checked)
+            # (ldd is told where the bundle keeps its own libraries, and only the Qt files are checked)
             export LD_LIBRARY_PATH=/t/Cairn/_internal:/t/Cairn/_internal/PySide6/Qt/lib
             find /t/Cairn \( -name "libQt6*" -o -name "libq*.so" -o -name QtWebEngineProcess -o -name "*.abi3.so" \) -type f | xargs ldd 2>/dev/null | grep "not found" | sort | uniq -c | sort -rn | head -40 || true
             unset LD_LIBRARY_PATH
