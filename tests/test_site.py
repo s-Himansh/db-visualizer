@@ -28,9 +28,9 @@ def test_every_file_the_page_uses_is_there():
 
 
 def test_download_links_name_the_files_the_release_workflow_builds():
-    built = set(re.findall(r'file: (DB-Visualizer-[\w-]+)', (ROOT / '.github/workflows/release.yml').read_text()))
-    linked = set(re.findall(r'releases/latest/download/(DB-Visualizer-[\w-]+)\.zip', (SITE / 'index.html').read_text()))
-    in_script = set(re.findall(r"file: '(DB-Visualizer-[\w-]+)\.zip'", (SITE / 'app.js').read_text()))
+    built = set(re.findall(r'file: (Cairn-[\w-]+)', (ROOT / '.github/workflows/release.yml').read_text()))
+    linked = set(re.findall(r'releases/latest/download/(Cairn-[\w-]+)\.zip', (SITE / 'index.html').read_text()))
+    in_script = set(re.findall(r"file: '(Cairn-[\w-]+)\.zip'", (SITE / 'app.js').read_text()))
     assert built == linked == in_script and len(built) == 3, (built, linked, in_script)
 
 

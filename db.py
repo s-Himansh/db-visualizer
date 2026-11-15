@@ -84,7 +84,11 @@ class CustomJSONProvider(DefaultJSONProvider):
 
 
 __version__ = '1.0.0'
-APP_NAME = 'DB Visualizer'
+APP_NAME = 'Cairn'
+# What the app calls its own storage: the data folder and the keychain entry. These are identifiers, not branding. They stay
+# as they were before the rename, because renaming them would hide every existing user's saved connections and make their
+# saved passwords unreadable. (Pinned by a test.)
+STORAGE_NAME = 'DB Visualizer'
 STATIC_DIR = Path(getattr(sys, '_MEIPASS', Path(__file__).parent)) / 'static'
 
 
@@ -98,7 +102,7 @@ def _data_dir() -> Path:
         base = Path(os.environ.get('APPDATA', Path.home()))
     else:
         base = Path(os.environ.get('XDG_DATA_HOME', Path.home() / '.local' / 'share'))
-    return base / APP_NAME
+    return base / STORAGE_NAME
 
 
 # Configuration
@@ -169,7 +173,7 @@ CONNECTOR_CLASSES = {
 # Windows Credential Manager, Secret Service); 'file' keeps secret.key beside the data. An explicit data
 # directory means a portable or test setup, so it defaults to 'file' and never touches the user's keychain.
 KEY_STORE = os.environ.get('DBV_KEY_STORE') or ('file' if os.environ.get('DBV_DATA_DIR') else 'keychain')
-KEY_SERVICE = os.environ.get('DBV_KEYRING_SERVICE', APP_NAME)
+KEY_SERVICE = os.environ.get('DBV_KEYRING_SERVICE', STORAGE_NAME)
 KEY_ACCOUNT = 'connection-encryption-key'
 _key_cache: Optional[bytes] = None
 
@@ -1889,7 +1893,7 @@ def shutdown():
 
 
 def self_check():
-    """`DB Visualizer --self-check`: prove a packaged build is whole (window library, keychain, pages, fonts) without
+    """`Cairn --self-check`: prove a packaged build is whole (window library, keychain, pages, fonts) without
     opening a window. The release build runs it on every platform, because a missing bundled file only shows up frozen."""
     import webview, keyring                                              # noqa: F401  (importing them is the test)
     keyring.get_keyring()

@@ -1,8 +1,10 @@
 <div align="center">
 
-# 🗄️ DB Visualizer
+# 🪨 Cairn
 
-**Look at your data, follow its relationships, and change it without being afraid of it.**
+**Find your way around any database: look at your data, follow its relationships, and change it without being afraid of it.**
+
+*(Cairn was called DB Visualizer until v0.2. Your saved connections and passwords carry over unchanged.)*
 
 A desktop app for browsing and editing SQL and NoSQL databases, with guard rails that stop the expensive mistakes.
 
@@ -26,7 +28,7 @@ A desktop app for browsing and editing SQL and NoSQL databases, with guard rails
 
 ## ⬇️ Download
 
-**[Get DB Visualizer for macOS or Windows](https://s-himansh.github.io/db-visualizer/)**: download, open, done. No Python and nothing to install. Every build is also on the [Releases page](../../releases/latest) with checksums. The builds aren't signed yet, so the first launch asks you to confirm once (the page shows how).
+**[Get Cairn for macOS or Windows](https://s-himansh.github.io/db-visualizer/)**: download, open, done. No Python and nothing to install. Every build is also on the [Releases page](../../releases/latest) with checksums. The builds aren't signed yet, so the first launch asks you to confirm once (the page shows how).
 
 Prefer to run it from source, or on Linux? Use the quick start below.
 
@@ -177,7 +179,7 @@ flowchart LR
 | UI | `static/js/` (`app`, `connection`, `query`, `tabs`, `ui`, `palette`, `relations`, `insights`, `assistant`) |
 | SQL assistant | `ai_assistant.py` |
 | Sample shop database | `sample_data.py` |
-| Your data | `~/Library/Application Support/DB Visualizer` (saved connections, saved queries, accepted relationships, `app.log`, known SSH hosts) |
+| Your data | `~/Library/Application Support/DB Visualizer` (the folder keeps its old name on purpose, so existing installs keep their connections: saved connections, saved queries, accepted relationships, `app.log`, known SSH hosts) |
 
 </details>
 
@@ -381,7 +383,7 @@ flowchart LR
 python tests/ssh_fixture/make_keys.py                      # once: throwaway SSH keys for the tunnel tests (never committed)
 docker compose -f docker-compose.test.yml up -d --wait     # MySQL, PostgreSQL, SQL Server, Oracle, MongoDB, Redis, Cassandra, SSH
 .venv/bin/python -m pytest tests/integration               # the same contract against each real database
-./build.sh                                                 # runs the tests, then builds dist/DB Visualizer.app
+./build.sh                                                 # runs the tests, then builds dist/Cairn.app
 ```
 
 GitHub Actions runs the unit, real-database and browser tests on Linux, the unit and browser tests on Windows, and builds the macOS app, on every push and pull request. Pushing a tag like `v0.1.0` runs the Release workflow: it builds the macOS (Apple Silicon and Intel) and Windows apps, has each built app check itself (`--self-check`), and publishes them as a GitHub Release. The download page in `site/` is published to GitHub Pages when it changes on main; `tests/e2e/shots_for_site.py` regenerates its screenshots.
