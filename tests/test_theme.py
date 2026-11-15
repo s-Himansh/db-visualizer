@@ -82,6 +82,7 @@ def test_the_theme_is_set_before_any_stylesheet_loads_so_the_page_never_flashes(
 
 def test_the_self_check_used_by_the_release_build_passes():
     import subprocess, sys, os
+    pytest.importorskip('webview')      # the check needs the window library; the test jobs that never open a window don't install it
     out = subprocess.run([sys.executable, 'db.py', '--self-check'], capture_output=True, text=True, timeout=60,
                          cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                          env={**os.environ, 'DBV_DATA_DIR': os.environ.get('TMPDIR', '/tmp') + '/dbv-selfcheck'})
