@@ -44,11 +44,11 @@ jobs:
         with:
           merge-multiple: true
       - name: Write the checksums
-        run: sha256sum *.zip *.dmg | tee SHA256SUMS.txt
+        run: sha256sum *.zip *.dmg *.tar.gz | tee SHA256SUMS.txt
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" *.zip *.dmg SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" \
+          gh release create "$GITHUB_REF_NAME" *.zip *.dmg *.tar.gz SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" \
             --title "Cairn $GITHUB_REF_NAME" --generate-notes \
             --notes "These builds are not signed yet, so the first launch needs one confirmation. macOS 15 and newer: click Done, then System Settings > Privacy & Security > Open Anyway. Older macOS: right-click the app and choose Open. Windows: More info, then Run anyway. Details: https://s-himansh.github.io/db-visualizer/"

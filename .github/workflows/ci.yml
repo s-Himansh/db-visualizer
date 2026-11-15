@@ -15,7 +15,7 @@ concurrency:
 # inside:
 #
 #   Checks           (does the pull request touch the packaging?)
-#   Build            macOS (Apple Silicon), macOS (Intel), Windows      only when packaging changed   build-apps.yml
+#   Build            macOS (Apple Silicon), macOS (Intel), Windows, Linux   only when packaging changed   build-apps.yml
 #   Linux tests      Unit, Browser (1 of 3), (2 of 3), (3 of 3)                                         tests-os.yml
 #   Windows tests    Unit, Browser (1 of 3), (2 of 3), (3 of 3)                                         tests-os.yml
 #   Database tests   SQL, SQL in the browser, MongoDB / Redis / Cassandra                               tests-databases.yml

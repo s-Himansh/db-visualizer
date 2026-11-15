@@ -562,6 +562,7 @@ def handle_error(e):
 def index():
     """Serve the main page with the per-launch API token attached to every fetch, and the saved theme applied
     before the first paint so there is no flash of the wrong one."""
+    logger.info('serving the main page')        # one line per page load; the Linux build check looks for it to see the window drew something
     html = (STATIC_DIR / 'index.html').read_text(encoding='utf-8')
     theme = ('(function(){var p=%s,r=document.documentElement;r.dataset.themePref=p;'
              "r.dataset.theme=p==='system'?(matchMedia('(prefers-color-scheme: light)').matches?'sky':'obsidian'):p;})();"
@@ -1892,11 +1893,29 @@ def shutdown():
         connector.close_tunnel()
 
 
+def linux_web_view_defaults(env):
+    """The environment the packaged Linux app starts its web view with. Nothing the user has set is overridden.
+
+    The packaged app carries Qt, so there is nothing to install (the GTK route needs system libraries). Chromium's own sandbox needs
+    kernel features some distributions switch off for ordinary programs (Ubuntu 24.04 does), and without them the window never
+    opens; this window only ever shows the app's own pages from 127.0.0.1, never the web, so it runs without that extra layer.
+    OpenGL is off by default: the app is a data grid and forms, which draw fine in software, and software drawing works on machines
+    with no or broken GL (virtual machines, remote desktops, some drivers), where GLX otherwise aborts the program with
+    'Could not initialize GLX'. Setting DBV_GPU=1 turns hardware drawing back on."""
+    gpu = bool(env.get('DBV_GPU'))
+    env.setdefault('QTWEBENGINE_CHROMIUM_FLAGS', '--no-sandbox' + ('' if gpu else ' --disable-gpu'))
+    if not gpu:
+        env.setdefault('QT_QUICK_BACKEND', 'software')
+        env.setdefault('QT_XCB_GL_INTEGRATION', 'none')
+
+
 def self_check():
     """`Cairn --self-check`: prove a packaged build is whole (window library, keychain, pages, fonts) without
     opening a window. The release build runs it on every platform, because a missing bundled file only shows up frozen."""
     import webview, keyring                                              # noqa: F401  (importing them is the test)
     keyring.get_keyring()
+    if sys.platform.startswith('linux') and getattr(sys, 'frozen', False):
+        import qtpy, PySide6.QtWebEngineWidgets                          # noqa: F401  (the packaged Linux app carries its own web view)
     client = app.test_client()
     for url in ('/', '/static/js/tabs.js', '/static/fonts/instrument-sans-latin.woff2'):
         status = client.get(url).status_code
@@ -1924,4 +1943,9 @@ if __name__ == '__main__':
         fullscreen=False,
         min_size=(1000, 600)
     )
-    webview.start(debug=bool(os.environ.get('DBV_DEBUG')))
+    gui = None
+    if sys.platform.startswith('linux') and getattr(sys, 'frozen', False):
+        gui = 'qt'
+        linux_web_view_defaults(os.environ)
+    icon = STATIC_DIR / 'cairn.png'
+    webview.start(gui=gui, debug=bool(os.environ.get('DBV_DEBUG')), icon=str(icon) if icon.exists() else None)

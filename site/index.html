@@ -40,7 +40,7 @@
       <span class="get-note" id="get-note">Free. Your data never leaves your computer.</span>
     </div>
     <p class="other" id="other">
-      <a href="#download">macOS (Intel)</a><a href="#download">Windows</a><a href="#download">All downloads</a>
+      <a href="#download">macOS (Intel)</a><a href="#download">Windows</a><a href="#download">Linux</a><a href="#download">All downloads</a>
     </p>
     <p class="heads-up">These builds aren't signed yet, so your computer shows a security pop-up the first time you open the app. <a href="#first-launch">Here's what to click</a>, or <a href="#source">run it with Python instead</a> and skip the pop-up.</p>
 
@@ -169,6 +169,7 @@
       <div class="item"><div><b>macOS, Apple Silicon</b><small>M1 and newer <span data-size="mac-arm"></span></small></div><a class="btn" data-dl="mac-arm" href="https://github.com/s-Himansh/db-visualizer/releases/latest/download/Cairn-macOS-AppleSilicon.dmg">Download</a></div>
       <div class="item"><div><b>macOS, Intel</b><small>Macs from before late 2020 <span data-size="mac-intel"></span></small></div><a class="btn quiet" data-dl="mac-intel" href="https://github.com/s-Himansh/db-visualizer/releases/latest/download/Cairn-macOS-Intel.dmg">Download</a></div>
       <div class="item"><div><b>Windows</b><small>Windows 10 and 11 <span data-size="win"></span></small></div><a class="btn quiet" data-dl="win" href="https://github.com/s-Himansh/db-visualizer/releases/latest/download/Cairn-Windows.zip">Download</a></div>
+      <div class="item"><div><b>Linux</b><small>64-bit Intel or AMD computers <span data-size="linux"></span></small></div><a class="btn quiet" data-dl="linux" href="https://github.com/s-Himansh/db-visualizer/releases/latest/download/Cairn-Linux-x86_64.tar.gz">Download</a></div>
     </div>
 
     <h3 class="sub" id="first-launch">Expect a pop-up the first time you open it</h3>
@@ -197,10 +198,16 @@
     <p class="fine">Prefer one command? Or if a Mac says the app is damaged: that's the download quarantine, not the app. In Terminal, type the line below (with a space at the end), then drag <b>Cairn</b> from Finder into the Terminal window so it fills in the path, press Return, and open the app again. The steps above aren't needed after this.</p>
     <pre class="narrow"><code>xattr -dr com.apple.quarantine </code></pre>
     <p class="fine" style="margin-top: 10px">If the app is already in Applications, the whole thing is <code>xattr -dr com.apple.quarantine "/Applications/Cairn.app"</code>.</p>
-    <p class="fine">Each release lists SHA-256 checksums on its <a href="https://github.com/s-Himansh/db-visualizer/releases/latest">release page</a>. There's no Linux build yet; see the Python option below.</p>
+    <p class="fine">Each release lists SHA-256 checksums on its <a href="https://github.com/s-Himansh/db-visualizer/releases/latest">release page</a>.</p>
+
+    <h3 class="sub" id="linux">On Linux there's no pop-up, and nothing to install first</h3>
+    <p class="fine">The Linux build carries its own web view, so it doesn't need anything from your system's package manager. It needs a normal graphical desktop (any desktop has the usual graphics libraries, Mesa) and a 64-bit Intel or AMD computer. On an ARM computer, use the Python option below. Extract it and run it:</p>
+    <pre class="narrow"><code>tar xzf Cairn-Linux-x86_64.tar.gz
+./Cairn/Cairn</code></pre>
+    <p class="fine" style="margin-top: 10px">Or extract it with your file manager and double-click <b>Cairn</b> inside the folder. If no window opens, start it from a terminal as above and read what it prints.</p>
 
     <h3 class="sub" id="source">Or skip the pop-ups: run it with Python</h3>
-    <p class="fine">Started from your own Python, the app has no signing prompt at all. It needs Python 3.9 or newer, and the first run spends a minute installing what it uses. This is also the way on Linux.</p>
+    <p class="fine">Started from your own Python, the app has no signing prompt at all. It needs Python 3.9 or newer, and the first run spends a minute installing what it uses. This is also the way on ARM Linux, which has no build yet.</p>
     <div class="launch">
       <div>
         <h3>macOS and Linux</h3>

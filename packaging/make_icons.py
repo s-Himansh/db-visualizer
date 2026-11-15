@@ -48,4 +48,5 @@ with tempfile.TemporaryDirectory() as tmp:
     subprocess.run(['iconutil', '-c', 'icns', str(iconset), '-o', str(HERE / 'cairn.icns')], check=True)
 shutil.copy(HERE / 'cairn.svg', HERE.parent / 'site' / 'img' / 'cairn.svg')
 (HERE.parent / 'site' / 'img' / 'cairn-512.png').write_bytes(pngs[512])
+(HERE.parent / 'static' / 'cairn.png').write_bytes(pngs[256])        # the window icon on Linux
 print('icons written')
