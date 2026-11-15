@@ -1155,3 +1155,27 @@ body { font-feature-settings: 'kern', 'liga'; font-optical-sizing: auto; }
 /* the schema map: node headers wear the connection's colour */
 .map-node-head { fill: color-mix(in srgb, var(--accent) 20%, var(--raised)); }
 .map-node-title { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.01em; }
+
+/* ---------- cells that understand their data ---------- */
+.data-table td.cell-num, .data-table th.th-num { text-align: right; font-variant-numeric: tabular-nums; }
+.cell-pill { display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 9px 0 7px; border-radius: 999px; font: 500 12px/1 var(--font-ui); letter-spacing: 0; vertical-align: middle; }
+.cell-pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: none; }
+.cell-pill-ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
+.cell-pill-warn { color: var(--pending); background: color-mix(in srgb, var(--pending) 14%, transparent); }
+.cell-pill-bad { color: var(--danger); background: color-mix(in srgb, var(--danger) 13%, transparent); }
+.cell-pill-info { color: var(--env-development); background: color-mix(in srgb, var(--env-development) 14%, transparent); }
+.cell-pill-off { color: var(--muted); background: color-mix(in srgb, var(--muted) 14%, transparent); }
+.cell-pill-plain { color: var(--text); background: var(--accent-wash); }
+.cell-pill-plain::before { background: var(--accent); }
+
+/* the save bar: floats at the bottom centre of the table whenever there are unsaved changes */
+.table-data-container { position: relative; }
+.tb-pending { display: flex; align-items: center; gap: 8px; position: absolute; left: 50%; bottom: 22px; z-index: 30;
+    padding: 7px 8px 7px 16px; border-radius: 14px; background: var(--raised); border: 1px solid var(--line-strong); box-shadow: var(--shadow-lg);
+    opacity: 0; transform: translate(-50%, 160%); pointer-events: none; transition: transform .45s var(--spring), opacity .2s; }
+.tb-pending.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.tb-pending .tb-count { font-weight: 600; color: var(--text-strong); margin-right: 4px; white-space: nowrap; }
+.tb-group.tb-pending { margin-left: 0; padding-left: 16px; border-left: 1px solid var(--line-strong); }
+.tb-group + .tb-group.tb-pending { margin-left: 0; }
+
+.table-data-container .table-data-grid { padding-bottom: 70px; }

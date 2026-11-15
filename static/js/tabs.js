@@ -356,7 +356,8 @@ class TabManager {
                             <button class="btn btn-sm btn-success" data-tab-id="${tab.id}" data-action="add-row">${Icons.plus}Add row</button>
                             <button class="btn btn-sm btn-danger" data-tab-id="${tab.id}" data-action="delete-row">${Icons.trash}Delete rows</button>
                         </span>
-                        <span class="tb-group tb-pending">
+                        <span class="tb-group tb-pending" role="group" aria-label="Unsaved changes">
+                            <span class="tb-count" id="pending-count-${tab.id}" aria-live="polite"></span>
                             <button class="btn btn-sm btn-primary" data-tab-id="${tab.id}" data-action="save-changes" style="display: none;">${Icons.check}Save changes</button>
                             <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="undo-edit" style="display: none;" title="Undo your last edit (Cmd/Ctrl+Z)">${Icons.undo}Undo</button>
                             <button class="btn btn-sm" data-tab-id="${tab.id}" data-action="discard-changes" style="display: none;">${Icons.close}Discard</button>
@@ -1253,9 +1254,10 @@ class TabManager {
 
     renderQueryResultsBatched(tab, result, resultsGrid) {
         // Build table header first
+        const kinds = this.columnKinds(result.columns, result.rows);
         let headerHtml = '<table class="data-table"><thead><tr>';
         result.columns.forEach(col => {
-            headerHtml += `<th>
+            headerHtml += `<th${kinds[col] === 'number' ? ' class="th-num"' : ''}>
                 <span class="th-content">${this.escapeHtml(col)}</span>
                 <div class="resize-handle"></div>
             </th>`;
@@ -1279,7 +1281,7 @@ class TabManager {
 
                 result.columns.forEach(col => {
                     const value = row[col];
-                    batchHtml += this.renderCellHtml(value, col);
+                    batchHtml += this.renderCellHtml(value, col, kinds[col]);
                 });
 
                 batchHtml += '</tr>';
@@ -1310,9 +1312,10 @@ class TabManager {
 
     renderQueryResultsBatchedProgressive(tab, result, resultsGrid, onComplete) {
         // Build table header first
+        const kinds = this.columnKinds(result.columns, result.rows);
         let headerHtml = '<table class="data-table"><thead><tr>';
         result.columns.forEach(col => {
-            headerHtml += `<th>
+            headerHtml += `<th${kinds[col] === 'number' ? ' class="th-num"' : ''}>
                 <span class="th-content">${this.escapeHtml(col)}</span>
                 <div class="resize-handle"></div>
             </th>`;
@@ -1337,7 +1340,7 @@ class TabManager {
 
                 result.columns.forEach(col => {
                     const value = row[col];
-                    batchHtml += this.renderCellHtml(value, col);
+                    batchHtml += this.renderCellHtml(value, col, kinds[col]);
                 });
 
                 batchHtml += '</tr>';
@@ -1377,7 +1380,7 @@ class TabManager {
         setTimeout(renderBatch, 0);
     }
 
-    renderCellHtml(value, col) {
+    renderCellHtml(value, col, kind) {
         if (value === null || value === undefined || value === '') {
             return `<td class="null" contenteditable="false" data-column="${this.escapeHtml(col)}" data-original-value="">NULL</td>`;
         } else if (typeof value === 'object') {
@@ -1414,7 +1417,8 @@ class TabManager {
                     </td>`;
                 } else {
                     // Short regular string
-                    return `<td contenteditable="false" data-column="${this.escapeHtml(col)}" data-original-value="${this.escapeHtml(strValue)}" title="${this.escapeHtml(strValue)}">${this.escapeHtml(strValue)}</td>`;
+                    const inner = typeof value === 'boolean' ? this.boolPill(value) : kind === 'status' ? this.statusPill(strValue) : this.escapeHtml(strValue);
+                    return `<td${kind === 'number' ? ' class="cell-num"' : ''} contenteditable="false" data-column="${this.escapeHtml(col)}" data-original-value="${this.escapeHtml(strValue)}" title="${this.escapeHtml(strValue)}">${inner}</td>`;
                 }
             }
 
@@ -1492,6 +1496,49 @@ class TabManager {
             `<div class="skeleton-row"><i style="width:${widths[i % widths.length] * 0.3}%"></i><i style="width:${widths[(i + 3) % widths.length] * 0.6}%"></i><i style="width:${widths[(i + 6) % widths.length] * 0.4}%"></i></div>`).join('')}</div>`;
     }
 
+    // ---- cells that understand their data ------------------------------------------------------------------------
+    // What a column holds, judged from the rows on screen: numbers line up on the right, true/false and status-like
+    // columns (a few short words such as paid / pending / refunded) become small coloured pills. The text stays the
+    // text: an edit, a copy and a save all see exactly what the database holds.
+    columnKinds(columns, rows) {
+        const kinds = {};
+        for (const col of columns) {
+            const values = rows.map(r => r[col]).filter(v => v !== null && v !== undefined && v !== '');
+            if (!values.length) continue;
+            if (values.every(v => typeof v === 'number')) kinds[col] = 'number';
+            else if (values.every(v => typeof v === 'boolean')) kinds[col] = 'boolean';
+            else if (/(^|[_\s-])(status|state|stage|priority|tier|level|role|kind|type|plan|category)$/i.test(col)
+                     && values.every(v => typeof v === 'string' && v.length <= 18) && new Set(values).size <= 8) kinds[col] = 'status';
+        }
+        return kinds;
+    }
+
+    statusTone(text) {
+        const word = String(text).trim().toLowerCase().replace(/[\s-]+/g, '_');
+        const tones = {
+            ok: ['paid', 'active', 'success', 'successful', 'succeeded', 'done', 'complete', 'completed', 'approved', 'enabled', 'delivered', 'live', 'resolved', 'verified', 'confirmed', 'healthy', 'online', 'yes', 'true'],
+            warn: ['pending', 'processing', 'in_progress', 'waiting', 'queued', 'draft', 'scheduled', 'trial', 'review', 'in_review', 'on_hold', 'hold', 'paused', 'partial'],
+            bad: ['failed', 'error', 'refunded', 'cancelled', 'canceled', 'rejected', 'blocked', 'banned', 'expired', 'deleted', 'overdue', 'declined', 'suspended', 'offline'],
+            info: ['shipped', 'new', 'open', 'created', 'sent', 'started', 'running', 'beta'],
+            off: ['inactive', 'archived', 'disabled', 'closed', 'unknown', 'none', 'no', 'false']
+        };
+        return Object.keys(tones).find(t => tones[t].includes(word)) || 'plain';
+    }
+
+    // after an edit, the pill takes the colour of the word now inside it
+    refreshPill(cell) {
+        const pill = cell.querySelector('.cell-pill');
+        if (pill) pill.className = `cell-pill cell-pill-${this.statusTone(cell.textContent)}`;
+    }
+
+    statusPill(text) {
+        return `<span class="cell-pill cell-pill-${this.statusTone(text)}">${this.escapeHtml(text)}</span>`;
+    }
+
+    boolPill(value) {
+        return `<span class="cell-pill cell-pill-${value ? 'ok' : 'off'}">${value ? 'true' : 'false'}</span>`;
+    }
+
     renderTableData(tab, tableData, gridElement) {
         // the rows rise in the first time a table opens; sorting, searching and paging redraw them without the show
         gridElement.classList.toggle('first-load', !tab.revealed);
@@ -1509,6 +1556,7 @@ class TabManager {
 
         const conn = window.app.connectionManager.connections.find(c => c.id === tab.connectionId);
         const insights = !!conn && ColumnInsights.supported(conn.type);   // column insights read through SQL
+        const kinds = this.columnKinds(tableData.columns, tableData.rows);
         let html = '<table class="data-table selectable">';
 
         // Header with resize handles and checkbox for selection
@@ -1516,7 +1564,7 @@ class TabManager {
         html += `<th style="width: 40px;"><input type="checkbox" class="select-all" aria-label="Select all rows"></th>`;
         tableData.columns.forEach(col => {
             const sorted = tab.state.sortBy === col ? (tab.state.sortOrder || 'ASC').toLowerCase() : '';
-            html += `<th data-col="${this.escapeHtml(col)}" ${sorted ? `data-sort="${sorted}" aria-sort="${sorted === 'asc' ? 'ascending' : 'descending'}"` : ''}>
+            html += `<th data-col="${this.escapeHtml(col)}"${kinds[col] === 'number' ? ' class="th-num"' : ''} ${sorted ? `data-sort="${sorted}" aria-sort="${sorted === 'asc' ? 'ascending' : 'descending'}"` : ''}>
                 <span class="th-content" title="Click to sort">${this.escapeHtml(col)}</span>${insights ? `<button type="button" class="th-insight" title="What is in this column?" aria-label="About column ${this.escapeHtml(col)}">▾</button>` : ''}
                 <div class="resize-handle"></div>
             </th>`;
@@ -1598,7 +1646,9 @@ class TabManager {
                         </td>`;
                     } else {
                         // Short regular strings - make editable
-                        html += `<td class="editable" contenteditable="true" data-column="${this.escapeHtml(col)}" data-original-value="${this.escapeHtml(strValue)}" title="${this.escapeHtml(strValue)}">${this.escapeHtml(strValue)}</td>`;
+                        const kind = kinds[col];
+                        const inner = typeof value === 'boolean' ? this.boolPill(value) : kind === 'status' ? this.statusPill(strValue) : this.escapeHtml(strValue);
+                        html += `<td class="editable${kind === 'number' ? ' cell-num' : ''}" contenteditable="true" data-column="${this.escapeHtml(col)}" data-original-value="${this.escapeHtml(strValue)}" title="${this.escapeHtml(strValue)}">${inner}</td>`;
                     }
                 }
             });
@@ -2131,6 +2181,7 @@ class TabManager {
                     newValue = e.target.textContent.trim();
                 }
 
+                this.refreshPill(e.target);   // an edited status keeps its pill, in the colour of its new word
                 const originalValue = e.target.getAttribute('data-original-value');
 
                 const before = e.target.dataset.editBefore;
@@ -2176,6 +2227,15 @@ class TabManager {
         const undoBtn = document.querySelector(`[data-tab-id="${tab.id}"][data-action="undo-edit"]`);
 
         if (!show) tab.editHistory = [];
+        // the bar floats up from the bottom of the table while there is something to save, and says how much
+        const bar = saveBtn && saveBtn.closest('.tb-pending');
+        if (bar) {
+            const grid = document.getElementById(`table-data-grid-${tab.id}`);
+            const n = grid ? grid.querySelectorAll('td.modified, tr.new-row').length : 0;
+            bar.classList.toggle('show', !!show);
+            const label = document.getElementById(`pending-count-${tab.id}`);
+            if (label) label.textContent = show ? `${n || 1} unsaved change${(n || 1) === 1 ? '' : 's'}` : '';
+        }
         if (saveBtn) saveBtn.style.display = show ? 'inline-block' : 'none';
         if (discardBtn) discardBtn.style.display = show ? 'inline-block' : 'none';
         if (undoBtn) undoBtn.style.display = show && tab.editHistory && tab.editHistory.length ? 'inline-block' : 'none';
@@ -2190,7 +2250,9 @@ class TabManager {
         while ((step = (tab.editHistory || []).pop()) && !step.cell.isConnected);   // skip cells the table has since redrawn
         if (!step) return;
         const { cell, before } = step;
-        cell.textContent = before === '' ? 'NULL' : before;
+        const pill = cell.querySelector('.cell-pill');
+        if (pill && before !== '') { pill.textContent = before; this.refreshPill(cell); }
+        else cell.textContent = before === '' ? 'NULL' : before;
         cell.classList.toggle('null', before === '');
         cell.classList.toggle('modified', before !== cell.getAttribute('data-original-value'));
         const grid = cell.closest('.data-table');
