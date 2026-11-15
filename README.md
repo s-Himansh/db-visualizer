@@ -4,8 +4,6 @@
 
 **Find your way around any database: look at your data, follow its relationships, and change it without being afraid of it.**
 
-*(Cairn was called DB Visualizer until v0.2. Your saved connections and passwords carry over unchanged.)*
-
 A desktop app for browsing and editing SQL and NoSQL databases, with guard rails that stop the expensive mistakes.
 
 ![Python](https://img.shields.io/badge/python-3.9%2B-3776AB?logo=python&logoColor=white)
