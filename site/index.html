@@ -41,6 +41,7 @@
     <p class="other" id="other">
       <a href="#download">macOS (Intel)</a><a href="#download">Windows</a><a href="#download">All downloads</a>
     </p>
+    <p class="heads-up">These builds aren't signed yet, so your computer shows a security pop-up the first time you open the app. <a href="#first-launch">Here's what to click</a>, or <a href="#source">run it with Python instead</a> and skip the pop-up.</p>
 
     <picture class="shot">
       <source srcset="img/grid-obsidian.png" media="(prefers-color-scheme: dark)">
@@ -129,8 +130,8 @@
       <div class="item"><div><b>Windows</b><small>Windows 10 and 11 <span data-size="win"></span></small></div><a class="btn quiet" data-dl="win" href="https://github.com/s-Himansh/db-visualizer/releases/latest/download/DB-Visualizer-Windows.zip">Download</a></div>
     </div>
 
-    <h3 style="font: 600 19px var(--display); margin: 44px 0 0">The first time you open it</h3>
-    <p class="fine" style="margin-top: 8px">These builds aren't signed with a developer certificate yet, so your computer asks once. It's a one-time step, and after that the app opens like any other.</p>
+    <h3 class="sub" id="first-launch">Expect a pop-up the first time you open it</h3>
+    <p class="fine">macOS says it can't verify the app, and Windows shows a blue "Windows protected your PC" box. That's because the builds aren't signed with a developer certificate yet. It doesn't mean anything is wrong with the file. You confirm once, and after that the app opens like any other.</p>
     <div class="launch">
       <div>
         <h3>On a Mac</h3>
@@ -149,7 +150,28 @@
         </ol>
       </div>
     </div>
-    <p class="fine">If a Mac says the app is damaged, it's the download quarantine, not the app. Run <code>xattr -dr com.apple.quarantine "/Applications/DB Visualizer.app"</code> in Terminal and open it again. Each release lists SHA-256 checksums on its <a href="https://github.com/s-Himansh/db-visualizer/releases/latest">release page</a>. There's no Linux build yet; on Linux you can <a href="https://github.com/s-Himansh/db-visualizer#-quick-start-from-source">run it from source</a>.</p>
+    <p class="fine">If a Mac says the app is damaged, that's the download quarantine, not the app. Run this in Terminal and open it again:</p>
+    <pre class="narrow"><code>xattr -dr com.apple.quarantine "/Applications/DB Visualizer.app"</code></pre>
+    <p class="fine">Each release lists SHA-256 checksums on its <a href="https://github.com/s-Himansh/db-visualizer/releases/latest">release page</a>. There's no Linux build yet; see the Python option below.</p>
+
+    <h3 class="sub" id="source">Or skip the pop-ups: run it with Python</h3>
+    <p class="fine">Started from your own Python, the app has no signing prompt at all. It needs Python 3.9 or newer, and the first run spends a minute installing what it uses. This is also the way on Linux.</p>
+    <div class="launch">
+      <div>
+        <h3>macOS and Linux</h3>
+        <pre><code>git clone https://github.com/s-Himansh/db-visualizer.git
+cd db-visualizer
+./run.sh</code></pre>
+      </div>
+      <div>
+        <h3>Windows</h3>
+        <pre><code>git clone https://github.com/s-Himansh/db-visualizer.git
+cd db-visualizer
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements.txt
+.venv\Scripts\python db.py</code></pre>
+      </div>
+    </div>
   </section>
   </main>
 

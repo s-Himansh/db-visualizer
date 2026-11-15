@@ -91,3 +91,22 @@ def test_the_page_follows_the_system_theme_and_swaps_its_screenshots(browser):
         assert pg.evaluate('getComputedStyle(document.body).backgroundColor') == bg
         shot = pg.evaluate("document.querySelector('.hero picture img').currentSrc")
         assert shot.endswith('grid-sky.png' if scheme == 'light' else 'grid-obsidian.png')
+
+
+def test_the_pop_up_warning_is_seen_before_scrolling_and_its_links_work(browser):
+    pg = open_page(browser, MAC)
+    box = pg.locator('.heads-up').bounding_box()
+    assert box['y'] + box['height'] < 900, box                                # on the first screen, not at the bottom
+    assert 'pop-up' in pg.inner_text('.heads-up')
+    pg.click('.heads-up a[href="#source"]')
+    pg.wait_for_function("(() => { const r = document.getElementById('source').getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; })()")
+    assert './run.sh' in pg.inner_text('#source ~ .launch')
+    pg.click('.heads-up a[href="#first-launch"]') if pg.locator('.heads-up a[href="#first-launch"]').is_visible() else pg.evaluate("location.hash = '#first-launch'")
+    pg.wait_for_function("(() => { const r = document.getElementById('first-launch').getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; })()")
+
+
+def test_the_code_blocks_scroll_instead_of_breaking_a_phone_layout(browser):
+    pg = open_page(browser, MAC, width=360)
+    pg.wait_for_load_state('load')
+    assert pg.evaluate('document.documentElement.scrollWidth') <= 360
+    assert pg.locator('#source ~ .launch pre').count() == 2

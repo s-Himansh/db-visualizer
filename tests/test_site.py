@@ -38,3 +38,19 @@ def test_the_page_loads_nothing_from_the_internet():
     html = (SITE / 'index.html').read_text() + (SITE / 'style.css').read_text() + (SITE / 'fonts.css').read_text()
     loaded = re.findall(r'(?:src|srcset)="(https?://[^"]+)"|url\((https?://[^)]+)\)|<link[^>]+rel="stylesheet"[^>]+href="(https?://[^"]+)"', html)
     assert loaded == []        # links to GitHub are for clicking; nothing is fetched by the page itself except the release lookup in app.js
+
+
+def test_every_link_within_the_page_lands_on_something():
+    html = (SITE / 'index.html').read_text(encoding='utf-8')
+    ids = set(re.findall(r'\bid="([^"]+)"', html))
+    jumps = set(re.findall(r'href="#([^"]+)"', html))
+    assert {'first-launch', 'source', 'download'} <= jumps
+    assert jumps - ids == set(), jumps - ids
+
+
+def test_the_python_route_uses_the_commands_the_readme_documents():
+    html = (SITE / 'index.html').read_text(encoding='utf-8')
+    readme = (ROOT / 'README.md').read_text(encoding='utf-8')
+    assert './run.sh' in html and './run.sh' in readme
+    assert 'python -m venv .venv' in html and r'.venv\Scripts\python db.py' in html
+    assert 'requirements.txt' in html and (ROOT / 'requirements.txt').exists() and (ROOT / 'run.sh').exists()
