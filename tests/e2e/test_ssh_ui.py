@@ -16,10 +16,24 @@ def up(port):
         return s.connect_ex(('127.0.0.1', port)) == 0
 
 
+def ensure_people():
+    """The tunnel tests look for a `people` table with 30 rows in the MySQL test database. The integration tests used to leave
+    one behind, so these only passed when run after them; now they make what they need (and top it up if another test removed rows)."""
+    import pymysql
+    conn = pymysql.connect(host='127.0.0.1', port=13306, user='root', password='testpw', database='dbviz', autocommit=True)
+    try:
+        with conn.cursor() as cur:
+            cur.execute('CREATE TABLE IF NOT EXISTS people(id INT PRIMARY KEY, name VARCHAR(50), country VARCHAR(5), score DECIMAL(6,2))')
+            cur.executemany('INSERT IGNORE INTO people VALUES (%s, %s, %s, %s)', [(i, f'Person {i}', 'XX', i) for i in range(1, 31)])
+    finally:
+        conn.close()
+
+
 @pytest.fixture(autouse=True)
 def tunnel_servers():
     if not (up(12222) and up(13306)):
         pytest.skip('sshd/mysql test containers not running')
+    ensure_people()
     known = Path(os.environ['E2E_SERVER_DATA_DIR']) / 'known_hosts.json'
     known.unlink(missing_ok=True)   # every test starts as a first-time visitor
     yield known
