@@ -11,6 +11,11 @@ on:
         description: The runner label to use, for example ubuntu-latest or windows-latest.
         required: true
         type: string
+      browser:
+        description: The engine the browser tests drive. chromium is the default; webkit is what the Mac app uses (run it on a macOS runner).
+        required: false
+        type: string
+        default: chromium
 
 permissions:
   contents: read
@@ -22,6 +27,7 @@ env:
 jobs:
   unit:
     name: Unit
+    if: inputs.browser == 'chromium'                   # the unit tests do not depend on the engine: once is enough
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 15
     defaults:
@@ -47,6 +53,8 @@ jobs:
     name: Browser (${{ matrix.group }} of 3)
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 25
+    env:
+      E2E_BROWSER: ${{ inputs.browser }}
     strategy:
       fail-fast: false
       matrix:
@@ -73,12 +81,12 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: chromium-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
-      - name: Install Chromium
+      - name: Install the browser (${{ inputs.browser }})
         if: runner.os != 'Linux' || steps.chromium.outputs.cache-hit != 'true'
-        run: playwright install ${{ runner.os == 'Linux' && '--with-deps' || '' }} chromium
-      - name: Install Chromium's system libraries
+        run: playwright install ${{ runner.os == 'Linux' && '--with-deps' || '' }} ${{ inputs.browser }}
+      - name: Install the browser's system libraries
         if: runner.os == 'Linux' && steps.chromium.outputs.cache-hit == 'true'
-        run: playwright install-deps chromium
+        run: playwright install-deps ${{ inputs.browser }}
       # Each worker starts its own app server on a free port with its own data folder, so two workers do not share state.
       - name: Run the browser tests (chunk ${{ matrix.group }} of 3)
         run: >

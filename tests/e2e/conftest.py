@@ -68,13 +68,21 @@ def server(tmp_path_factory, fake_ai_server):
     proc.terminate()
 
 
+# Which engine the browser tests drive: chromium (the default), or webkit, which is what the Mac app really uses (WKWebView) and what
+# Safari uses. Set E2E_BROWSER=webkit to run the suite on it.
+ENGINE = os.environ.get('E2E_BROWSER', 'chromium')
+
+
 @pytest.fixture(scope='session')
 def browser():
     with playwright_sync.sync_playwright() as p:
-        try:
-            b = p.chromium.launch(channel='chrome')
-        except Exception:
-            b = p.chromium.launch()
+        if ENGINE == 'chromium':
+            try:
+                b = p.chromium.launch(channel='chrome')
+            except Exception:
+                b = p.chromium.launch()
+        else:
+            b = getattr(p, ENGINE).launch()
         yield b
         b.close()
 

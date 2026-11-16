@@ -19,6 +19,7 @@ concurrency:
 #   Linux tests      Unit, Browser (1 of 3), (2 of 3), (3 of 3)                                         tests-os.yml
 #   Windows tests    Unit, Browser (1 of 3), (2 of 3), (3 of 3)                                         tests-os.yml
 #   macOS tests      Unit, Browser (1 of 3), (2 of 3), (3 of 3)   Apple Silicon                         tests-os.yml
+#   macOS WebKit tests   Browser (1 of 3), (2 of 3), (3 of 3)     the same tests on WebKit, as the Mac app runs   tests-os.yml
 #   Database tests   SQL, SQL in the browser, MongoDB / Redis / Cassandra                               tests-databases.yml
 #
 # The wait on a pull request is the slowest single runner, so the long suites are cut into chunks on separate machines.
@@ -71,6 +72,15 @@ jobs:
     uses: ./.github/workflows/tests-os.yml
     with:
       runner: macos-latest
+
+  # The same browser tests on WebKit, the engine the Mac app really uses (WKWebView; Safari too). Until this group existed every browser test
+  # drove Chromium, so the engine most Mac users run was never tested. Browser chunks only: the unit tests do not depend on the engine.
+  macos-webkit-tests:
+    name: macOS WebKit tests
+    uses: ./.github/workflows/tests-os.yml
+    with:
+      runner: macos-latest
+      browser: webkit
 
   database-tests:
     name: Database tests

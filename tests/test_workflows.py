@@ -70,3 +70,13 @@ def test_the_desktop_check_is_manual_only():
     triggers = data.get('on') or data.get(True)                                            # YAML reads a bare "on" as True
     assert set(triggers) == {'workflow_dispatch'}
     assert triggers['workflow_dispatch']['inputs']['tag']['required'] is True
+
+
+def test_the_webkit_tests_run_on_a_mac_and_the_engine_reaches_the_tests():
+    """WebKit is what the Mac app uses; Playwright's WebKit only makes sense on a macOS runner, and the tests only drive it when told to."""
+    workflows = WORKFLOWS[0].parent
+    job = yaml.safe_load((workflows / 'ci.yml').read_text())['jobs']['macos-webkit-tests']
+    assert job['with']['runner'].startswith('macos') and job['with']['browser'] == 'webkit'
+    reusable = yaml.safe_load((workflows / 'tests-os.yml').read_text())
+    assert reusable['jobs']['browser']['env']['E2E_BROWSER'] == '${{ inputs.browser }}'
+    assert 'E2E_BROWSER' in (WORKFLOWS[0].parent.parent.parent / 'tests' / 'e2e' / 'conftest.py').read_text()
