@@ -68,6 +68,13 @@ def server(tmp_path_factory, fake_ai_server):
     proc.terminate()
 
 
+def first_family(font_family):
+    """The first font name of a computed font-family, without quotes. Engines write the same value differently: Chromium and WebKit 26
+    give "Instrument Sans", -apple-system, ... and WebKit 27 gives Instrument Sans, -apple-system, ... A test about WHICH font is
+    used must not depend on how an engine quotes it."""
+    return font_family.split(',')[0].strip().strip('"\'')
+
+
 # Which engine the browser tests drive: chromium (the default), or webkit, which is what the Mac app really uses (WKWebView) and what
 # Safari uses. Set E2E_BROWSER=webkit to run the suite on it.
 ENGINE = os.environ.get('E2E_BROWSER', 'chromium')
