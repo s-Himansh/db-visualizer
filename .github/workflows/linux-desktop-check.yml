@@ -1,0 +1,45 @@
+name: Linux desktop check
+
+# Runs a Linux build in a FULL DESKTOP SESSION (XFCE: window manager, panel, a real X display) on a native x86-64 Ubuntu 24.04 machine,
+# with nothing but the desktop installed. It drives the app's own window with real mouse and keyboard input (open the sample database,
+# open a table, check the grid, edit a cell, discard it) and keeps screenshots of the whole desktop as an artifact, so you can look.
+#
+# Run it by hand: Actions > Linux desktop check > Run workflow, and give
+#   a release tag      v0.2.3          the published download, checked against its checksum
+#   run:<id>           run:43843861947  the Linux build of a CI run, to test a fix BEFORE anything is released
+#
+# Why it exists: the container check in the Build workflow (packaging/linux-check.sh) once passed a release that could not start on a
+# real desktop installed without its optional packages (libEGL was missing). Only a full desktop showed it. Run this on every release
+# that changes the Linux build, and on a CI build before releasing it.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: A release tag such as v0.2.3, or run:<id> for the Linux build of a CI run
+        required: true
+
+permissions:
+  contents: read
+  actions: read          # to download the build of a CI run
+
+jobs:
+  desktop:
+    name: Linux desktop check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+      - name: Run the app in a desktop
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash packaging/linux-desktop-check.sh "${{ inputs.tag }}"
+      - name: Keep the screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-desktop-check
+          path: |
+            desktop-check/*.png
+            desktop-check/*.log
+          if-no-files-found: warn

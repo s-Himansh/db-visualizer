@@ -49,8 +49,24 @@ def test_the_workflows_parse_and_every_called_workflow_exists():
 
 
 @needs_bash
-def test_the_linux_check_script_is_valid_shell():
-    script = Path(__file__).resolve().parent.parent / 'packaging' / 'linux-check.sh'
-    result = subprocess.run(['bash', '-n', str(script)], capture_output=True, text=True)
+@pytest.mark.parametrize('script, run_by', [('linux-check.sh', 'build-apps.yml'), ('linux-desktop-check.sh', 'linux-desktop-check.yml')])
+def test_the_linux_check_scripts_are_valid_shell_and_a_workflow_runs_them(script, run_by):
+    path = Path(__file__).resolve().parent.parent / 'packaging' / script
+    result = subprocess.run(['bash', '-n', str(path)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
-    assert 'linux-check.sh' in (WORKFLOWS[0].parent / 'build-apps.yml').read_text()       # and the workflow actually runs it
+    assert script in (WORKFLOWS[0].parent / run_by).read_text()                            # and the workflow actually runs it
+
+
+def test_the_desktop_drive_script_compiles():
+    import py_compile
+    drive = Path(__file__).resolve().parent.parent / 'packaging' / 'linux_desktop_drive.py'
+    py_compile.compile(str(drive), doraise=True)
+    assert 'linux_desktop_drive.py' in (drive.parent / 'linux-desktop-check.sh').read_text()
+
+
+def test_the_desktop_check_is_manual_only():
+    """It downloads a 270 MB release and starts a desktop: run by hand, never on a push (the branch version ran on every push)."""
+    data = yaml.safe_load((WORKFLOWS[0].parent / 'linux-desktop-check.yml').read_text())
+    triggers = data.get('on') or data.get(True)                                            # YAML reads a bare "on" as True
+    assert set(triggers) == {'workflow_dispatch'}
+    assert triggers['workflow_dispatch']['inputs']['tag']['required'] is True
