@@ -344,6 +344,7 @@ Off until you turn it on (**Ask** in a query tab, or ⌘K → *SQL assistant set
 ## 🔐 Security
 
 - **Passwords are encrypted** with Fernet. The key lives in the **system keychain** (macOS Keychain, Windows Credential Manager, Secret Service), not in a file. An existing `secret.key` is moved there on first run (checked by reading it back) and then deleted.
+- **The keychain entry is named "Cairn".** Before v0.2.5 it was named "DB Visualizer" (the app's old name). On first launch the key is copied to the new name, the old item is left in place, and your saved passwords keep working. macOS may ask once more at that moment; choose **Always Allow**. You can delete the old "DB Visualizer" item in Keychain Access afterwards, but an older Cairn on the same Mac would then no longer find the key.
 - **No usable keychain?** The key stays in `secret.key` (`0600`). With an explicit `DBV_DATA_DIR` (portable or test setups) the key stays in that folder and the keychain isn't touched. `DBV_KEY_STORE=keychain|file` overrides this.
 - **The key is never replaced once it exists.** A locked or unreadable keychain stops the app with a clear message instead of inventing a new key that would orphan every saved password.
 - **Back up carefully.** `connections.json` is useless without the key. Lose the keychain item and your saved passwords are gone (the connections remain; re-enter the passwords).
