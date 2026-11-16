@@ -69,6 +69,30 @@ echo "desktop windows now: $(xdotool search --onlyvisible --name '' 2>/dev/null 
 import -window root 01-desktop-before-the-app.png
 
 if [ "${DESKTOP_GPU:-0}" = "1" ]; then export DBV_GPU=1; echo "starting WITH DBV_GPU=1 (hardware drawing)"; fi
+if [ "${DESKTOP_GPU_BISECT:-0}" = "1" ]; then
+    # With DBV_GPU=1 the app fails on this desktop although a plain Qt program gets OpenGL here, so something in the bundle is at fault.
+    # The bundle carries ~300 libraries copied from the build machine (Ubuntu 22.04), among them the X11 client stack, which then sits in
+    # front of the desktop's own newer ones. Remove groups of them CUMULATIVELY and try the app after each: the first step at which the
+    # window stays open names the group.
+    echo "::group::Which bundled libraries break the hardware drawing path?"
+    NAMES=("nothing removed" "GL dispatch" "X11 client" "xcb extensions" "drm, gbm, udev, wayland")
+    LIBS=(""
+          "libGL.so.1 libGLX.so.0 libGLdispatch.so.0 libEGL.so.1"
+          "libX11.so.6 libX11-xcb.so.1 libXext.so.6 libXau.so.6 libXdmcp.so.6 libXfixes.so.3 libXrender.so.1 libXi.so.6 libXcomposite.so.1 libXdamage.so.1 libXrandr.so.2 libXtst.so.6 libXcursor.so.1 libXinerama.so.1"
+          "libxcb-glx.so.0 libxcb-randr.so.0 libxcb-render.so.0 libxcb-shm.so.0 libxcb-sync.so.1 libxcb-xfixes.so.0 libxcb-dri3.so.0"
+          "libgbm.so.1 libdrm.so.2 libudev.so.1 libexpat.so.1 libwayland-client.so.0 libwayland-server.so.0 libwayland-egl.so.1 libwayland-cursor.so.0")
+    cp -a app trial
+    for i in 0 1 2 3 4; do
+        for lib in ${LIBS[$i]}; do rm -f "trial/Cairn/_internal/$lib"; done
+        ( export DBV_GPU=1 DBV_DATA_DIR="$OUT/data-trial$i"; ./trial/Cairn/Cairn > "trial$i.log" 2>&1 & pid=$!
+          sleep 14
+          if kill -0 $pid 2>/dev/null; then echo "  RESULT after removing up to [${NAMES[$i]}]: the app stayed running"; kill $pid; sleep 1; kill -9 $pid 2>/dev/null
+          else echo "  RESULT after removing up to [${NAMES[$i]}]: it exited ($(grep -m1 -oE 'Could not initialize GLX|cannot open shared object file[^,]*|undefined symbol[^ ]*' "trial$i.log" || echo see log))"; fi ) || true
+    done
+    echo "::endgroup::"
+    exit 0
+fi
+
 echo "::group::Start the app the way a person would"
 # QTWEBENGINE_REMOTE_DEBUGGING only lets the test drive the window afterwards; it changes no rendering setting.
 DBV_DATA_DIR="$OUT/data" QTWEBENGINE_REMOTE_DEBUGGING=9222 ./app/Cairn/Cairn > app-stdout.log 2>&1 &
