@@ -29,6 +29,11 @@ on:
         description: With gpu, try the app under several GL settings (EGL instead of GLX, forced desktop GL, Chromium GL flags) and report which start
         type: boolean
         default: false
+      remove_libs:
+        description: Libraries (space separated) to delete from the app's bundle before starting it, to test whether a bundled copy is the cause of a failure, for example "libstdc++.so.6 libgcc_s.so.1"
+        required: false
+        type: string
+        default: ''
       without_bundled_gl:
         description: With gpu, delete the graphics dispatch libraries the app bundles first, so it must use the system's (tests whether the bundled ones are the cause of a GLX failure)
         type: boolean
@@ -52,6 +57,7 @@ jobs:
           DESKTOP_GPU: ${{ inputs.gpu && '1' || '0' }}
           DESKTOP_GPU_BISECT: ${{ inputs.bisect && '1' || '0' }}
           DESKTOP_GPU_VARIANTS: ${{ inputs.variants && '1' || '0' }}
+          DESKTOP_REMOVE_LIBS: ${{ inputs.remove_libs }}
           DESKTOP_WITHOUT_BUNDLED_GL: ${{ inputs.without_bundled_gl && '1' || '0' }}
         run: bash packaging/linux-desktop-check.sh "${{ inputs.tag }}"
       - name: Keep the screenshots and logs

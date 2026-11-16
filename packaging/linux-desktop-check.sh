@@ -22,6 +22,12 @@ else
 fi
 ls -la "$TAR" | awk '{print $5/1048576 " MB"}'
 mkdir app && tar xzf "$TAR" -C app
+if [ -n "${DESKTOP_REMOVE_LIBS:-}" ]; then
+    echo "removing from the bundle, so the system's copies are used: $DESKTOP_REMOVE_LIBS"
+    for lib in $DESKTOP_REMOVE_LIBS; do
+        [ -e "app/Cairn/_internal/$lib" ] && rm -v "app/Cairn/_internal/$lib" | sed 's/^/  /' || echo "  (not in the bundle: $lib)"
+    done
+fi
 if [ "${DESKTOP_WITHOUT_BUNDLED_GL:-0}" = "1" ]; then
     echo "removing the bundled graphics dispatch libraries, so the system's are used:"
     for lib in libGL.so.1 libGLX.so.0 libGLdispatch.so.0 libEGL.so.1; do
