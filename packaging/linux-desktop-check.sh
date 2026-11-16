@@ -62,6 +62,20 @@ if [ "${DESKTOP_GPU:-0}" = "1" ]; then
     python3 -m pip install --user -q "PySide6-Essentials~=6.12" 2>&1 | tail -1
     QT_QPA_PLATFORM=xcb python3 "$ROOT/packaging/qt_gl_control.py" 2>&1 | sed 's/^/  /' | cut -c1-200 || true
     echo "::endgroup::"
+    echo "::group::Control: Cairn FROM SOURCE (plain Python and pip-installed Qt, no PyInstaller), hardware path on"
+    python3 -m pip install --user -q -r "$ROOT/requirements.txt" -r "$ROOT/requirements-linux.txt" 2>&1 | tail -1
+    sudo apt-get install -y -qq --no-install-recommends libnss3 libnspr4 libasound2t64 libxcomposite1 libxdamage1 libxrandr2 libxtst6 libxshmfence1 \
+        libxfixes3 libxkbfile1 libegl1 libgl1 >/dev/null
+    ( cd "$ROOT" && DISPLAY=:1 DBV_GPU=1 QT_QPA_PLATFORM=xcb QTWEBENGINE_CHROMIUM_FLAGS="--no-sandbox" DBV_DATA_DIR="$OUT/data-source" \
+        python3 db.py > "$OUT/source.log" 2>&1 & pid=$!
+      sleep 25
+      if kill -0 $pid 2>/dev/null; then
+          echo "  RESULT [from source, hardware path]: the app stayed running; its window: $(DISPLAY=:1 xdotool search --onlyvisible --name '^Cairn$' 2>/dev/null | head -1 | sed 's/^$/none found/')"
+          kill $pid; sleep 1; kill -9 $pid 2>/dev/null
+      else
+          echo "  RESULT [from source, hardware path]: it exited ($(grep -m1 -oE 'Could not initialize GLX|ModuleNotFoundError[^\n]*|ImportError[^\n]*' "$OUT/source.log" || echo see source.log))"; tail -4 "$OUT/source.log" | cut -c1-200 | sed 's/^/    /'
+      fi ) || true
+    echo "::endgroup::"
     echo "::group::Control: can a plain Qt WebEngine program (no Cairn, no PyInstaller) show a page on this desktop?"
     sudo apt-get install -y -qq --no-install-recommends libnss3 libnspr4 libasound2t64 libxcomposite1 libxdamage1 libxrandr2 libxtst6 libxshmfence1 \
         libxfixes3 libxkbfile1 libegl1 libgl1 >/dev/null
