@@ -76,8 +76,56 @@ class ConnectionManager {
 
             this.connections = data.connections || [];
             this.renderConnections();
+            this.showKeychainState(data.keychain);
         } catch (error) {
             console.error('Error loading connections:', error);
+        }
+    }
+
+    // ---- the OS keychain would not give Cairn the key to its saved passwords ---------------------------------------------------
+    // On a Mac this is "Deny" on the keychain prompt (or a locked keychain). The server asks the keychain once and then leaves it alone, so
+    // the prompt does not come back by itself; what is left is to say so plainly and offer one deliberate retry. Until then saved
+    // connections are listed but their passwords cannot be used, which used to show up only as a confusing login failure.
+    showKeychainState(state) {
+        const locked = !!state && state.available === false;
+        const banner = document.getElementById('keychain-banner');
+        if (banner) banner.hidden = !locked;
+        if (!banner) return;
+        if (!banner.dataset.wired) {
+            banner.dataset.wired = '1';
+            document.getElementById('keychain-unlock').addEventListener('click', () => this.askAboutKeychain());
+        }
+        if (locked && !this.keychainAsked) {      // the dialog once per launch; after that the banner is the way back
+            this.keychainAsked = true;
+            this.keychainMessage = state.message;
+            this.askAboutKeychain();
+        }
+    }
+
+    async askAboutKeychain() {
+        const again = await ui.confirm(
+            (this.keychainMessage || "Cairn can't read its key from your keychain.") +
+            '\n\nUntil then your saved connections are listed, but their passwords can\'t be used and new passwords can\'t be saved. ' +
+            'Connections that need no password, like the sample database, still work.',
+            { title: "Cairn can't open its keychain entry", confirmLabel: 'Try again', cancelLabel: 'Continue without saved passwords' });
+        if (again) await this.retryKeychain();
+    }
+
+    async retryKeychain() {
+        let state;
+        try {
+            state = await (await fetch('/api/keychain/retry', { method: 'POST' })).json();   // the one prompt the person asked for
+        } catch (error) {
+            console.error('Could not retry the keychain:', error);
+            return;
+        }
+        this.keychainMessage = state.message;
+        if (state.available) {
+            await this.loadConnections();
+            ui.notify('Saved passwords are unlocked.', 'success');
+        } else {
+            this.showKeychainState(state);
+            await this.askAboutKeychain();        // still refused: say so, and let them choose again (one prompt per choice, never by itself)
         }
     }
 

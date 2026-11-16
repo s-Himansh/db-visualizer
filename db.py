@@ -178,6 +178,16 @@ KEY_ACCOUNT = 'connection-encryption-key'
 _key_cache: Optional[bytes] = None
 
 
+class KeychainUnavailable(RuntimeError):
+    """The system keychain would not give the app its encryption key (the person chose Deny, or the keychain is locked)."""
+
+
+# A refusal is remembered. Without this every request that needed a saved password asked the keychain again, and a Mac showed its
+# "wants to use your confidential information" prompt once per field of every saved connection: a Deny just brought the next prompt, dozens
+# of times. Now the keychain is asked once; after a refusal it is left alone until the person chooses Try again (retry_keychain).
+_key_error: Optional[KeychainUnavailable] = None
+
+
 def _os_keyring():
     """The OS credential store, or None when there is no working one (headless Linux, store disabled)."""
     if KEY_STORE != 'keychain':
@@ -207,9 +217,11 @@ def load_key() -> bytes:
     So if the keychain cannot be read (locked, denied) and there is no file copy, this raises instead of
     inventing a key.
     """
-    global _key_cache
+    global _key_cache, _key_error
     if _key_cache:
         return _key_cache
+    if _key_error is not None:
+        raise _key_error                      # already refused: do not ask (and so prompt) again
 
     file_key = _read_key_file()
     store = _os_keyring()
@@ -219,8 +231,11 @@ def load_key() -> bytes:
             stored = store.get_password(KEY_SERVICE, KEY_ACCOUNT)
         except Exception as e:
             if file_key is None:
-                raise RuntimeError(f'Could not read the encryption key from the system keychain ({e}). '
-                                   'Unlock the keychain and restart the app.') from e
+                logger.warning('The system keychain would not give up the encryption key (%s)', e)
+                _key_error = KeychainUnavailable(
+                    "Cairn can't read the key that protects your saved passwords from your keychain, so it can't use or save passwords until it can. "
+                    'Choose Try again and, when your Mac asks, enter your login password and choose Always Allow.')
+                raise _key_error from e
             logger.warning('Could not read the keychain (%s); using the key file', e)
             stored = None
             store = None
@@ -250,6 +265,24 @@ def load_key() -> bytes:
             _write_key_file(key)
     _key_cache = key
     return key
+
+
+def keychain_status() -> dict:
+    """Whether the encryption key could be read: what the page uses to say so instead of leaving passwords silently blank."""
+    if _key_error is not None:
+        return {'available': False, 'message': str(_key_error)}
+    return {'available': True}
+
+
+def retry_keychain() -> dict:
+    """Forget the refusal and ask the keychain once more (the one prompt the person asked for)."""
+    global _key_error
+    _key_error = None
+    try:
+        load_key()
+    except KeychainUnavailable:
+        pass
+    return keychain_status()
 
 
 def get_cipher():
@@ -329,8 +362,9 @@ def load_connections() -> list:
             if conn_copy.get(field):
                 try:
                     conn_copy[field] = decrypt_password(conn_copy[field])
-                except Exception:
-                    logger.warning('Could not decrypt %s for %s (wrong or missing key?)', field, conn.get('id'))
+                except Exception as e:
+                    if not isinstance(e, KeychainUnavailable):      # a refusal is already logged once, and the page is told about it
+                        logger.warning('Could not decrypt %s for %s (wrong or missing key?)', field, conn.get('id'))
                     unreadable[field] = conn_copy[field]  # keep the ciphertext so a later save does not erase it
                     conn_copy[field] = ''
         if unreadable:
@@ -361,6 +395,8 @@ def save_connections(connections: list):
             os.replace(CONNECTIONS_FILE, CONNECTIONS_FILE.with_suffix('.bak'))
         os.replace(tmp, CONNECTIONS_FILE)
         return True
+    except KeychainUnavailable:
+        raise                      # not a failed write: the key is locked. Let the page say so (and nothing was written)
     except Exception:
         logger.exception('Error saving connections')
         return False
@@ -554,6 +590,8 @@ def handle_error(e):
         return jsonify({'success': False, 'error': e.description}), e.code
     if isinstance(e, ConnectionError):
         return jsonify({'success': False, 'error': str(e)}), 503
+    if isinstance(e, KeychainUnavailable):
+        return jsonify({'success': False, 'error_code': 'keychain_unavailable', 'error': str(e)}), 503
     logger.exception('Unhandled error on %s %s', request.method, request.path)
     return error_response(e)
 
@@ -910,7 +948,18 @@ def get_connections():
                 safe_conn[field] = '***' if safe_conn[field] else ''
         safe_connections.append(safe_conn)
 
-    return jsonify({'connections': safe_connections})
+    return jsonify({'connections': safe_connections, 'keychain': keychain_status()})
+
+
+@app.route('/api/keychain', methods=['GET'])
+def get_keychain():
+    return jsonify(keychain_status())
+
+
+@app.route('/api/keychain/retry', methods=['POST'])
+def retry_keychain_route():
+    """Ask the keychain again, once. On a Mac this is where the system prompt appears."""
+    return jsonify(retry_keychain())
 
 
 @app.route('/api/connections', methods=['POST'])
