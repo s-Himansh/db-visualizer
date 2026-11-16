@@ -6,6 +6,7 @@ to it (QtWebEngine does not implement the browser-context part of the protocol i
 keyboard events through the X server (xdotool), so the app receives what a person's hand would send. Screenshots of the whole desktop are
 taken between steps with ImageMagick."""
 import json
+import os
 import subprocess
 import sys
 import time
@@ -85,6 +86,15 @@ print('web view:', info['ua'].split(') ')[-1], f"{info['w']}x{info['h']}", flush
 check('the page title is Cairn', info['title'] == 'Cairn', info['title'])
 check('it is the packaged Qt web view', 'QtWebEngine' in info['ua'])
 check('the first screen offers the sample database', wait_for("!!document.querySelector('#welcome-sample')"))
+
+if os.environ.get('DESKTOP_GPU') == '1':
+    # hardware drawing path: ask the page what is drawing for it. WebGL exists only if the GPU process found a working GL driver.
+    gl = js("""(() => { const g = document.createElement('canvas').getContext('webgl2') || document.createElement('canvas').getContext('webgl');
+        if (!g) return null; const e = g.getExtension('WEBGL_debug_renderer_info');
+        return {renderer: e ? g.getParameter(e.UNMASKED_RENDERER_WEBGL) : g.getParameter(g.RENDERER), version: g.getParameter(g.VERSION)}; })()""")
+    print('GL as the web view sees it:', gl, flush=True)
+    check('the web view has WebGL, so its GPU process found a working GL driver', gl is not None)
+    check('through the system driver, not the browser own software fallback', bool(gl) and 'swiftshader' not in gl['renderer'].lower(), (gl or {}).get('renderer', ''))
 
 click('#welcome-sample')
 check('the sample database connected and lists its tables', wait_for("document.querySelectorAll('#tables-content .tree-item').length >= 3"),

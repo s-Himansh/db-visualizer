@@ -30,15 +30,29 @@ sudo apt-get install -y -qq --no-install-recommends xfce4 xfce4-terminal tigervn
     imagemagick x11-utils fonts-dejavu-core >/dev/null
 echo "::endgroup::"
 
+# DESKTOP_GPU=1: the app's hardware drawing path (DBV_GPU=1) instead of its software default. A CI machine has no physical GPU, so this
+# gives that path a real OpenGL driver to talk to: Mesa, whose software rasteriser (llvmpipe) is reached through the same libglvnd / GLX / EGL
+# plumbing a hardware driver uses. It tests how the app's bundled dispatch libraries meet the system's driver; it does not test any
+# particular vendor's driver.
+if [ "${DESKTOP_GPU:-0}" = "1" ]; then
+    echo "::group::Install Mesa, the OpenGL driver for the hardware drawing path"
+    sudo apt-get install -y -qq --no-install-recommends libgl1 libglx-mesa0 libgl1-mesa-dri libegl1 libegl-mesa0 libgbm1 mesa-utils >/dev/null
+    echo "::endgroup::"
+fi
+
 export DISPLAY=:1
 Xvnc :1 -geometry 1440x900 -depth 24 -SecurityTypes None -localhost yes > xvnc.log 2>&1 &
 for i in $(seq 1 30); do xdpyinfo >/dev/null 2>&1 && break; sleep 1; done
 xdpyinfo | grep -E "dimensions|depth of root" | sed 's/^ *//'
+if [ "${DESKTOP_GPU:-0}" = "1" ]; then
+    echo "--- what the desktop's OpenGL looks like"; glxinfo -B 2>&1 | grep -E "direct rendering|OpenGL renderer|OpenGL version|Error|couldn" | sed 's/^/  /'
+fi
 dbus-run-session -- startxfce4 > xfce.log 2>&1 &
 sleep 12                                     # the panel and window manager come up
 echo "desktop windows now: $(xdotool search --onlyvisible --name '' 2>/dev/null | wc -l)"
 import -window root 01-desktop-before-the-app.png
 
+if [ "${DESKTOP_GPU:-0}" = "1" ]; then export DBV_GPU=1; echo "starting WITH DBV_GPU=1 (hardware drawing)"; fi
 echo "::group::Start the app the way a person would"
 # QTWEBENGINE_REMOTE_DEBUGGING only lets the test drive the window afterwards; it changes no rendering setting.
 DBV_DATA_DIR="$OUT/data" QTWEBENGINE_REMOTE_DEBUGGING=9222 ./app/Cairn/Cairn > app-stdout.log 2>&1 &

@@ -17,6 +17,10 @@ on:
       tag:
         description: A release tag such as v0.2.3, or run:<id> for the Linux build of a CI run
         required: true
+      gpu:
+        description: Test the hardware drawing path (DBV_GPU=1) against Mesa, a real OpenGL driver (software rasteriser; a CI machine has no physical GPU)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -33,6 +37,7 @@ jobs:
       - name: Run the app in a desktop
         env:
           GH_TOKEN: ${{ github.token }}
+          DESKTOP_GPU: ${{ inputs.gpu && '1' || '0' }}
         run: bash packaging/linux-desktop-check.sh "${{ inputs.tag }}"
       - name: Keep the screenshots and logs
         if: always()
