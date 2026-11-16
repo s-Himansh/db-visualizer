@@ -7,7 +7,7 @@ WebEngine program on it, whatever its libraries; if both work while Cairn fails,
     python3 packaging/qt_gl_control.py        exit 0 = both worked"""
 import sys
 
-from PySide6.QtGui import QGuiApplication, QOpenGLContext, QSurfaceFormat, QWindow
+from PySide6.QtGui import QGuiApplication, QOffscreenSurface, QOpenGLContext, QSurfaceFormat, QWindow
 
 app = QGuiApplication(sys.argv)
 print('platform:', app.platformName(), flush=True)
@@ -29,6 +29,25 @@ def attempt(label, renderable_type, version):
     return current
 
 
-desktop = attempt('desktop OpenGL', QSurfaceFormat.RenderableType.OpenGL, (2, 1))
-es2 = attempt('OpenGL ES 2.0  ', QSurfaceFormat.RenderableType.OpenGLES, (2, 0))
-sys.exit(0 if desktop and es2 else 1)
+def attempt_offscreen(label, renderable_type, version):
+    """What Qt WebEngine does first: a shared context bound to an OFF-SCREEN surface, not a window. On X11 that is a GLX pbuffer, which needs
+    a framebuffer configuration that is pbuffer-capable; a virtual X server's software GLX may not offer any."""
+    fmt = QSurfaceFormat()
+    fmt.setRenderableType(renderable_type)
+    fmt.setVersion(*version)
+    surface = QOffscreenSurface()
+    surface.setFormat(fmt)
+    surface.create()
+    context = QOpenGLContext()
+    context.setFormat(surface.requestedFormat())
+    created = context.create()
+    current = bool(created and surface.isValid() and context.makeCurrent(surface))
+    print(f'{label}: surface valid={surface.isValid()}, context created={created}, made current on an OFF-SCREEN surface={current}', flush=True)
+    return current
+
+
+desktop = attempt('desktop OpenGL, on a window     ', QSurfaceFormat.RenderableType.OpenGL, (2, 1))
+es2 = attempt('OpenGL ES 2.0, on a window     ', QSurfaceFormat.RenderableType.OpenGLES, (2, 0))
+off_desktop = attempt_offscreen('desktop OpenGL, off-screen      ', QSurfaceFormat.RenderableType.OpenGL, (2, 1))
+off_es2 = attempt_offscreen('OpenGL ES 2.0, off-screen      ', QSurfaceFormat.RenderableType.OpenGLES, (2, 0))
+sys.exit(0 if desktop and es2 and off_desktop and off_es2 else 1)
