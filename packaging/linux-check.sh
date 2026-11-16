@@ -1,12 +1,13 @@
 #!/bin/bash
 # Run by the Build workflow inside a fresh ubuntu:24.04 container, to prove the Linux app starts the way it would for a person
 # who has just downloaded it:   bash /in/packaging/linux-check.sh Cairn-Linux-x86_64.tar.gz
-# /in is the repository (read-only) with the tarball in it. The container has a virtual screen and Mesa's graphics libraries
-# (what every Linux desktop has) and nothing else, so the libraries bundled in the app are what is being tested.
+# /in is the repository (read-only) with the tarball in it. The container has a virtual screen and nothing else (no Mesa, no
+# libGL, no libEGL), so the libraries bundled in the app are what is being tested. (An earlier version installed libegl1 here and
+# called it what every desktop has; a full desktop session then found the app failing for want of exactly that.)
 set -u
 
 apt-get update -qq
-apt-get install -y -qq --no-install-recommends xvfb xauth libegl1 libgl1 libegl-mesa0 libglx-mesa0 libgl1-mesa-dri >/dev/null
+apt-get install -y -qq --no-install-recommends xvfb xauth >/dev/null
 mkdir /t && tar xzf "/in/$1" -C /t && cd /t/Cairn || exit 1
 
 echo "--- libraries the bundle needs that this system lacks (none is best):"

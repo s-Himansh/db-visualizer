@@ -110,7 +110,8 @@ def demo_db(tmp_path):
 def page(browser, server, demo_db):
     ctx = browser.new_context(viewport={'width': 1400, 'height': 860}, accept_downloads=True)
     pg = ctx.new_page()
-    pg.set_default_timeout(6000)
+    pg.set_default_timeout(6000)             # a tight budget for what the UI should do, so slowness shows up
+    pg.set_default_navigation_timeout(30000)   # loading the page is a different wait: the first load on a busy Windows runner can pass 6s
     pg.errors = []
     pg.on('pageerror', lambda e: pg.errors.append(f'PAGEERROR {e}'))
     pg.on('console', lambda m: pg.errors.append(f'CONSOLE {m.text}') if m.type == 'error' else None)

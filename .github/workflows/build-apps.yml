@@ -46,10 +46,13 @@ jobs:
             --collect-all cassandra --collect-all pymssql --collect-submodules keyring `
             --collect-submodules anthropic --copy-metadata keyring db.py
 
-      # PyInstaller leaves the Wayland libraries out on purpose (they must match the desktop's graphics stack), but Qt's web engine
-      # will not load without three of them and an X11-only desktop (XFCE, MATE, i3) does not have them, so those three small,
-      # protocol-level ones are added by hand. libwayland-client is not: it can clash with the host's graphics drivers, and
-      # every desktop with Mesa or GTK already has it.
+      # PyInstaller leaves the graphics-stack libraries out on purpose (they should match the desktop's own drivers), but Qt loads
+      # them whether or not it draws with them, and a desktop installed without its optional packages does not have them: a full
+      # XFCE session found the app exiting at startup for want of libEGL. The app draws in software by default, so these are only
+      # the small, vendor-neutral dispatch layer (libglvnd: GL, GLX, GLdispatch, EGL), the Wayland client and server libraries,
+      # and the two Mesa-side libraries the web engine loads (libdrm, libxcb-dri3). They are added by hand. Hardware drawing
+      # (DBV_GPU=1) uses the system's own drivers through them; if that misbehaves, delete these files from the app folder.
+      # packaging/host-libraries.py then checks what is still asked of the host.
       # Linux has no built-in web view to lean on, so the app carries Qt's (PySide6, LGPL). The packages below are what Qt's web
       # engine needs on the build machine; PyInstaller copies the libraries it finds into the bundle, so the people who download
       # it install nothing. The web view is loaded by name at run time, which PyInstaller's import scan cannot see, so it is listed.
@@ -69,6 +72,13 @@ jobs:
             --add-binary /usr/lib/x86_64-linux-gnu/libwayland-server.so.0:. \
             --add-binary /usr/lib/x86_64-linux-gnu/libwayland-egl.so.1:. \
             --add-binary /usr/lib/x86_64-linux-gnu/libwayland-cursor.so.0:. \
+            --add-binary /usr/lib/x86_64-linux-gnu/libwayland-client.so.0:. \
+            --add-binary /usr/lib/x86_64-linux-gnu/libGL.so.1:. \
+            --add-binary /usr/lib/x86_64-linux-gnu/libGLX.so.0:. \
+            --add-binary /usr/lib/x86_64-linux-gnu/libGLdispatch.so.0:. \
+            --add-binary /usr/lib/x86_64-linux-gnu/libEGL.so.1:. \
+            --add-binary /usr/lib/x86_64-linux-gnu/libdrm.so.2:. \
+            --add-binary /usr/lib/x86_64-linux-gnu/libxcb-dri3.so.0:. \
             --hidden-import webview.platforms.qt --hidden-import qtpy --hidden-import PySide6.QtWebEngineWidgets \
             --hidden-import PySide6.QtWebEngineCore --hidden-import PySide6.QtWebChannel --hidden-import PySide6.QtNetwork db.py
 
@@ -97,6 +107,9 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path "dist\Cairn" -DestinationPath "${{ matrix.file }}.zip"
 
+      - name: List what the app asks of the desktop, and fail if it is more than expected (Linux)
+        if: runner.os == 'Linux'
+        run: python3 packaging/host-libraries.py dist/Cairn
       - name: Pack the app (Linux)
         if: runner.os == 'Linux'
         run: tar czf "${{ matrix.file }}.tar.gz" -C dist Cairn           # a tarball keeps the "may run" permission a zip would drop
