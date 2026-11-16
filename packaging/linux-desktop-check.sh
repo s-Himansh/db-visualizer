@@ -53,6 +53,13 @@ xdpyinfo | grep -E "dimensions|depth of root" | sed 's/^ *//'
 if [ "${DESKTOP_GPU:-0}" = "1" ]; then
     echo "--- what the desktop's OpenGL looks like"; glxinfo -B 2>&1 | grep -E "direct rendering|OpenGL renderer|OpenGL version|Error|couldn" | sed 's/^/  /'
 fi
+if [ "${DESKTOP_GPU:-0}" = "1" ]; then
+    # the control: plain Qt (not Cairn), same minor version as the bundle, asks this X server for OpenGL
+    echo "::group::Control: can a plain Qt program get OpenGL on this desktop?"
+    python3 -m pip install --user -q "PySide6-Essentials~=6.12" 2>&1 | tail -1
+    QT_QPA_PLATFORM=xcb python3 "$ROOT/packaging/qt_gl_control.py" 2>&1 | sed 's/^/  /' | cut -c1-200 || true
+    echo "::endgroup::"
+fi
 dbus-run-session -- startxfce4 > xfce.log 2>&1 &
 sleep 12                                     # the panel and window manager come up
 echo "desktop windows now: $(xdotool search --onlyvisible --name '' 2>/dev/null | wc -l)"
