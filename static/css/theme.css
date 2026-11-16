@@ -1214,3 +1214,10 @@ body { font-feature-settings: 'kern', 'liga'; font-optical-sizing: auto; }
 .data-table thead th, .data-table td { border-right: 1px solid color-mix(in srgb, var(--line) 60%, transparent); }
 .data-table thead th:last-child, .data-table td:last-child { border-right: none; }
 .data-table.selectable thead th:first-child, .data-table.selectable td:first-child { border-right-color: var(--line-strong); }
+
+
+/* the OS keychain would not give Cairn the key to its saved passwords: a slim, calm bar until it does */
+.keychain-banner { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 8px 14px; font-size: 13px; color: var(--text-strong);
+    background: var(--pending-wash); border-bottom: 1px solid color-mix(in srgb, var(--pending) 45%, var(--line)); flex: none; }
+.keychain-banner[hidden] { display: none; }
+.keychain-banner .btn { flex: none; }

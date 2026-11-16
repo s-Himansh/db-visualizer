@@ -16,8 +16,10 @@ class FakeKeychain:
             self.items[(db.KEY_SERVICE, db.KEY_ACCOUNT)] = stored
         self.fail_get, self.fail_set, self.lie = fail_get, fail_set, lie_on_readback
         self.sets = 0
+        self.gets = 0          # how many times the keychain was ASKED: on a Mac every ask can be a prompt
 
     def get_password(self, service, account):
+        self.gets += 1
         if self.fail_get:
             raise RuntimeError('keychain is locked')
         if self.lie and self.sets:
@@ -34,6 +36,7 @@ class FakeKeychain:
 @pytest.fixture(autouse=True)
 def fresh_key_state(monkeypatch):
     monkeypatch.setattr(db, '_key_cache', None)
+    monkeypatch.setattr(db, '_key_error', None)
     db.KEY_FILE.unlink(missing_ok=True)
     yield
     db.KEY_FILE.unlink(missing_ok=True)
@@ -42,6 +45,7 @@ def fresh_key_state(monkeypatch):
 def use(monkeypatch, keychain):
     monkeypatch.setattr(db, '_os_keyring', lambda: keychain)
     monkeypatch.setattr(db, '_key_cache', None)
+    monkeypatch.setattr(db, '_key_error', None)
 
 
 def stored(keychain):
@@ -176,3 +180,75 @@ def test_the_names_that_locate_saved_connections_and_passwords_survive_the_rebra
     assert db.KEY_SERVICE == 'DB Visualizer'
     monkeypatch.delenv('DBV_DATA_DIR', raising=False)                           # the real, per-user location
     assert db._data_dir().name == 'DB Visualizer'
+
+
+# ---- the keychain says no (a Mac user chose Deny): ask once, then stop and say so -----------------------------------------------
+
+def saved_connections_then_a_refusing_keychain(client, monkeypatch, count=6):
+    """Connections saved while the keychain worked, then the same keychain refusing (the person chose Deny)."""
+    good = FakeKeychain()
+    use(monkeypatch, good)
+    for i in range(count):
+        assert client.post('/api/connections', json={'name': f'c{i}', 'type': 'mysql', 'password': f'p{i}', 'ssh_password': f's{i}'}).get_json()['success']
+    refusing = FakeKeychain(stored=stored(good), fail_get=True)
+    use(monkeypatch, refusing)
+    return refusing
+
+
+def test_a_refused_keychain_is_asked_once_not_once_per_saved_password(client, monkeypatch):
+    """The bug: each of the dozens of saved passwords called load_key() again, and on a Mac each call was another prompt, so Deny
+    brought the next prompt, over and over."""
+    refusing = saved_connections_then_a_refusing_keychain(client, monkeypatch)
+    db.load_connections()
+    db.load_connections()
+    client.get('/api/connections')
+    assert refusing.gets == 1
+
+
+def test_the_list_still_shows_the_connections_and_says_the_keychain_is_locked(client, monkeypatch):
+    saved_connections_then_a_refusing_keychain(client, monkeypatch)
+    body = client.get('/api/connections').get_json()
+    assert len(body['connections']) == 6                                  # people can still see what is locked
+    assert body['keychain']['available'] is False and 'Try again' in body['keychain']['message']
+    assert all(c['password'] == '' or c['password'] == '***' for c in body['connections'])      # no secret ever leaves
+
+
+def test_saving_while_the_keychain_refuses_says_why_and_changes_nothing(client, monkeypatch):
+    saved_connections_then_a_refusing_keychain(client, monkeypatch)
+    before = db.CONNECTIONS_FILE.read_text()
+    response = client.post('/api/connections', json={'name': 'new', 'type': 'mysql', 'password': 'x'})
+    assert response.status_code == 503 and response.get_json()['error_code'] == 'keychain_unavailable'
+    assert 'keychain' in response.get_json()['error']
+    assert db.CONNECTIONS_FILE.read_text() == before                      # the existing, encrypted passwords are untouched
+
+
+def test_try_again_asks_once_more_and_everything_works_when_allowed(client, monkeypatch):
+    refusing = saved_connections_then_a_refusing_keychain(client, monkeypatch)
+    db.load_connections()
+    assert refusing.gets == 1
+    refusing.fail_get = False                                             # the person now chooses Allow
+    assert client.post('/api/keychain/retry').get_json() == {'available': True}
+    assert refusing.gets == 2
+    assert [c['password'] for c in db.load_connections()] == [f'p{i}' for i in range(6)]
+    assert client.get('/api/connections').get_json()['keychain'] == {'available': True}
+
+
+def test_try_again_while_still_refused_asks_exactly_once_and_stays_quiet_after(client, monkeypatch):
+    refusing = saved_connections_then_a_refusing_keychain(client, monkeypatch)
+    db.load_connections()
+    asked = refusing.gets
+    body = client.post('/api/keychain/retry').get_json()
+    assert body['available'] is False and refusing.gets == asked + 1      # one prompt, because they asked for it
+    db.load_connections()
+    client.get('/api/connections')
+    assert refusing.gets == asked + 1                                     # and then no more on their own
+
+
+def test_a_working_keychain_is_reported_available_and_asked_once(client, monkeypatch):
+    good = FakeKeychain(stored=Fernet.generate_key().decode())             # an existing install: the key is already there
+    use(monkeypatch, good)
+    assert client.get('/api/keychain').get_json() == {'available': True}
+    for name in ('a', 'b'):
+        assert client.post('/api/connections', json={'name': name, 'type': 'mysql', 'password': 'x'}).get_json()['success']
+    client.get('/api/connections')
+    assert good.gets == 1                                                  # asked once, then remembered

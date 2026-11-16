@@ -49,6 +49,11 @@
 
         <!-- Main content area -->
         <div class="main-content">
+            <!-- Shown only while the OS keychain will not give Cairn the key to its saved passwords (see connection.js) -->
+            <div class="keychain-banner" id="keychain-banner" role="alert" hidden>
+                <span class="keychain-banner-text">Saved passwords are locked: Cairn can't read its key from your keychain.</span>
+                <button type="button" class="btn btn-sm" id="keychain-unlock">Unlock</button>
+            </div>
             <!-- Toolbar -->
             <div class="toolbar">
                 <div class="toolbar-left">
