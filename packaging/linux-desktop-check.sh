@@ -22,6 +22,12 @@ else
 fi
 ls -la "$TAR" | awk '{print $5/1048576 " MB"}'
 mkdir app && tar xzf "$TAR" -C app
+if [ "${DESKTOP_WITHOUT_BUNDLED_GL:-0}" = "1" ]; then
+    echo "removing the bundled graphics dispatch libraries, so the system's are used:"
+    for lib in libGL.so.1 libGLX.so.0 libGLdispatch.so.0 libEGL.so.1; do
+        [ -e "app/Cairn/_internal/$lib" ] && rm -v "app/Cairn/_internal/$lib" | sed 's/^/  /'
+    done
+fi
 echo "::endgroup::"
 
 echo "::group::Install a desktop"

@@ -21,6 +21,10 @@ on:
         description: Test the hardware drawing path (DBV_GPU=1) against Mesa, a real OpenGL driver (software rasteriser; a CI machine has no physical GPU)
         type: boolean
         default: false
+      without_bundled_gl:
+        description: With gpu, delete the graphics dispatch libraries the app bundles first, so it must use the system's (tests whether the bundled ones are the cause of a GLX failure)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -38,6 +42,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DESKTOP_GPU: ${{ inputs.gpu && '1' || '0' }}
+          DESKTOP_WITHOUT_BUNDLED_GL: ${{ inputs.without_bundled_gl && '1' || '0' }}
         run: bash packaging/linux-desktop-check.sh "${{ inputs.tag }}"
       - name: Keep the screenshots and logs
         if: always()
