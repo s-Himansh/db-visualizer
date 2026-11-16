@@ -18,6 +18,7 @@ concurrency:
 #   Build            macOS (Apple Silicon), macOS (Intel), Windows, Linux   only when packaging changed   build-apps.yml
 #   Linux tests      Unit, Browser (1 of 3), (2 of 3), (3 of 3)                                         tests-os.yml
 #   Windows tests    Unit, Browser (1 of 3), (2 of 3), (3 of 3)                                         tests-os.yml
+#   macOS tests      Unit, Browser (1 of 3), (2 of 3), (3 of 3)   Apple Silicon                         tests-os.yml
 #   Database tests   SQL, SQL in the browser, MongoDB / Redis / Cassandra                               tests-databases.yml
 #
 # The wait on a pull request is the slowest single runner, so the long suites are cut into chunks on separate machines.
@@ -63,6 +64,13 @@ jobs:
     uses: ./.github/workflows/tests-os.yml
     with:
       runner: windows-latest
+
+  # Apple Silicon only: the Intel Mac is the same code on a slower, scarcer runner, so it keeps its build and self-check (Build group).
+  macos-tests:
+    name: macOS tests
+    uses: ./.github/workflows/tests-os.yml
+    with:
+      runner: macos-latest
 
   database-tests:
     name: Database tests
