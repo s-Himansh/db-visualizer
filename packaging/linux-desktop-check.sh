@@ -64,7 +64,7 @@ python3 "$ROOT/packaging/linux_desktop_drive.py" "$OUT" || { echo "the drive scr
 echo "::endgroup::"
 
 kill -0 $APP 2>/dev/null && echo "the app is still running after the session: yes" || { echo "the app is still running: NO (it exited)"; STATUS=1; }
-import -window root 06-the-desktop-at-the-end.png
+import -window root 07-the-desktop-at-the-end.png
 kill $APP 2>/dev/null || true; sleep 2; kill -9 $APP 2>/dev/null || true
 echo "--- the end of the app's output"; tail -5 app-stdout.log | cut -c1-200
 exit $STATUS

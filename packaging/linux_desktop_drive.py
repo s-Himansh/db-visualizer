@@ -113,6 +113,11 @@ check('editing a cell raises the unsaved-changes bar', js("document.querySelecto
 check('the edited value is in the cell', js("document.querySelector('.tab-content.active .data-table tbody tr:nth-child(2) td[data-column=total]').textContent.trim()") == '123.45')
 desktop('05-an-unsaved-edit.png')
 click('.tab-content.active [data-action=discard-changes]')
-check('discarding removes the bar', wait_for("document.querySelectorAll('.tb-pending.show').length === 0"))
+check('discarding asks first (the app confirms before throwing work away)', wait_for("!!document.querySelector('.app-dialog [data-answer=ok]')", 10))
+time.sleep(0.8)
+desktop('06-the-app-asks-before-discarding.png')
+click('.app-dialog [data-answer=ok]')
+check('confirming removes the bar', wait_for("document.querySelectorAll('.tb-pending.show').length === 0"))
+check('and puts the original value back', js("document.querySelector('.tab-content.active .data-table tbody tr:nth-child(2) td[data-column=total]').textContent.trim()") != '123.45')
 
 sys.exit(1 if failures else 0)
