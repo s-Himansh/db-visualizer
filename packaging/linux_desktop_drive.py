@@ -94,8 +94,8 @@ desktop('03-sample-database-connected.png')
 
 index = js("[...document.querySelectorAll('#tables-content .tree-item')].findIndex(e => e.textContent.includes('orders'))")
 click('#tables-content .tree-item', nth=index)
-check('a table opens and its grid draws rows', wait_for("document.querySelectorAll('.tab-content.active .data-table tbody tr').length >= 10"),
-      f"{js(\"document.querySelectorAll('.tab-content.active .data-table tbody tr').length\")} rows")
+ROWS = "document.querySelectorAll('.tab-content.active .data-table tbody tr').length"
+check('a table opens and its grid draws rows', wait_for(ROWS + ' >= 10'), f'{js(ROWS)} rows')
 check('the coloured status labels draw', js("document.querySelectorAll('.tab-content.active .cell-pill').length") > 0)
 check('the app typefaces loaded (Instrument Sans, Geist Mono)',
       js("document.fonts.load('13px \"Instrument Sans\"').then(f => f.length > 0)") and js("document.fonts.load('13px \"Geist Mono\"').then(f => f.length > 0)"))
