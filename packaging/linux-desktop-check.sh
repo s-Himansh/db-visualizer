@@ -63,11 +63,13 @@ if [ "${DESKTOP_GPU:-0}" = "1" ]; then
     QT_QPA_PLATFORM=xcb python3 "$ROOT/packaging/qt_gl_control.py" 2>&1 | sed 's/^/  /' | cut -c1-200 || true
     echo "::endgroup::"
     echo "::group::Control: Cairn FROM SOURCE (plain Python and pip-installed Qt, no PyInstaller), hardware path on"
-    python3 -m pip install --user -q -r "$ROOT/requirements.txt" -r "$ROOT/requirements-linux.txt" 2>&1 | tail -1
+    # a virtual environment: the machine's own Python packages (an older OpenSSL binding) clash with the pip-installed ones and stopped db.py
+    # before Qt was ever involved ("module lib has no attribute GEN_EMAIL"), which said nothing about OpenGL
+    python3 -m venv "$OUT/venv" && "$OUT/venv/bin/python" -m pip install -q -r "$ROOT/requirements.txt" -r "$ROOT/requirements-linux.txt" 2>&1 | tail -1
     sudo apt-get install -y -qq --no-install-recommends libnss3 libnspr4 libasound2t64 libxcomposite1 libxdamage1 libxrandr2 libxtst6 libxshmfence1 \
         libxfixes3 libxkbfile1 libegl1 libgl1 >/dev/null
     ( cd "$ROOT" && DISPLAY=:1 DBV_GPU=1 QT_QPA_PLATFORM=xcb QTWEBENGINE_CHROMIUM_FLAGS="--no-sandbox" DBV_DATA_DIR="$OUT/data-source" \
-        python3 db.py > "$OUT/source.log" 2>&1 & pid=$!
+        "$OUT/venv/bin/python" db.py > "$OUT/source.log" 2>&1 & pid=$!
       sleep 25
       if kill -0 $pid 2>/dev/null; then
           echo "  RESULT [from source, hardware path]: the app stayed running; its window: $(DISPLAY=:1 xdotool search --onlyvisible --name '^Cairn$' 2>/dev/null | head -1 | sed 's/^$/none found/')"
