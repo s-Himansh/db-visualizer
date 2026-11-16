@@ -1,0 +1,39 @@
+name: Linux desktop check
+
+# Runs a published Linux release in a full desktop session (XFCE) on a native x86-64 Ubuntu 24.04 machine, drives the app's own
+# window, and keeps screenshots of the whole desktop as an artifact. Run it by hand (Actions > Linux desktop check > Run workflow)
+# with a release tag, or it runs when this check's own files change on its branch.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release to test
+        required: true
+        default: v0.2.2
+  push:
+    branches: [check/linux-desktop]
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    name: Linux desktop / ${{ inputs.tag || 'v0.2.2' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+      - name: Run the released app in a desktop
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash packaging/linux-desktop-check.sh "${{ inputs.tag || 'v0.2.2' }}"
+      - name: Keep the screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-desktop-check
+          path: |
+            desktop-check/*.png
+            desktop-check/*.log
+          if-no-files-found: warn
