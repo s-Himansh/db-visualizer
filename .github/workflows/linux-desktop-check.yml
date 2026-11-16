@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: The release to test
+        description: A release tag such as v0.2.2, or run:<id> for the Linux build of a CI run
         required: true
         default: v0.2.2
   push:
@@ -15,10 +15,11 @@ on:
 
 permissions:
   contents: read
+  actions: read          # to download the build of a CI run
 
 jobs:
   desktop:
-    name: Linux desktop / ${{ inputs.tag || 'v0.2.2' }}
+    name: Linux desktop check
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -27,7 +28,11 @@ jobs:
       - name: Run the released app in a desktop
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bash packaging/linux-desktop-check.sh "${{ inputs.tag || 'v0.2.2' }}"
+        # by hand: the tag or run you typed; on a push to this branch: the line in packaging/desktop-check-source.txt
+        run: |
+          SOURCE="${{ inputs.tag }}"
+          if [ -z "$SOURCE" ]; then SOURCE=$(cat packaging/desktop-check-source.txt); fi
+          bash packaging/linux-desktop-check.sh "$SOURCE"
       - name: Keep the screenshots and logs
         if: always()
         uses: actions/upload-artifact@v4

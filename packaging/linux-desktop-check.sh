@@ -1,19 +1,26 @@
 #!/bin/bash
 # Runs the RELEASED Linux build in a full desktop session (XFCE: window manager, panel, a real X display) on a native x86-64 Ubuntu
 # machine, then drives the app's own window and takes screenshots of the whole desktop.
-#   bash packaging/linux-desktop-check.sh v0.2.2        (needs GH_TOKEN and GITHUB_REPOSITORY; used by the Linux desktop check workflow)
-# It uses the release file exactly as a person would get it, started the way they would start it (./Cairn/Cairn, no settings).
+#   bash packaging/linux-desktop-check.sh v0.2.2         a published release
+#   bash packaging/linux-desktop-check.sh run:43843861947   the Linux build of a CI run (to test a fix before anything is released)
+# (needs GH_TOKEN and GITHUB_REPOSITORY; used by the Linux desktop check workflow). It uses the file exactly as a person would get
+# it, started the way they would start it (./Cairn/Cairn, no settings).
 set -euo pipefail
-TAG=${1:?release tag, for example v0.2.2}
+SOURCE=${1:?a release tag such as v0.2.2, or run:<id>}
 TAR=Cairn-Linux-x86_64.tar.gz
 ROOT=$PWD
 OUT=${OUT:-$PWD/desktop-check}
 STATUS=0
 mkdir -p "$OUT" && cd "$OUT"
 
-echo "::group::Download the release and check its checksum"
-gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p "$TAR" -p SHA256SUMS.txt
-grep "$TAR" SHA256SUMS.txt | sha256sum -c -
+echo "::group::Download the build ($SOURCE)"
+if [[ "$SOURCE" == run:* ]]; then
+    gh run download "${SOURCE#run:}" -R "$GITHUB_REPOSITORY" -n Cairn-Linux-x86_64 -D .
+else
+    gh release download "$SOURCE" -R "$GITHUB_REPOSITORY" -p "$TAR" -p SHA256SUMS.txt
+    grep "$TAR" SHA256SUMS.txt | sha256sum -c -
+fi
+ls -la "$TAR" | awk '{print $5/1048576 " MB"}'
 mkdir app && tar xzf "$TAR" -C app
 echo "::endgroup::"
 
