@@ -56,6 +56,9 @@ fi
 if [ "${DESKTOP_GPU:-0}" = "1" ]; then
     # the control: plain Qt (not Cairn), same minor version as the bundle, asks this X server for OpenGL
     echo "::group::Control: can a plain Qt program get OpenGL on this desktop?"
+    # a plain Qt program needs the X11 libraries Cairn carries inside itself (since 6.5 the xcb plugin wants libxcb-cursor0 on the system)
+    sudo apt-get install -y -qq --no-install-recommends libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 \
+        libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libxkbcommon-x11-0 libxkbcommon0 libfontconfig1 libdbus-1-3 libglib2.0-0 >/dev/null
     python3 -m pip install --user -q "PySide6-Essentials~=6.12" 2>&1 | tail -1
     QT_QPA_PLATFORM=xcb python3 "$ROOT/packaging/qt_gl_control.py" 2>&1 | sed 's/^/  /' | cut -c1-200 || true
     echo "::endgroup::"
