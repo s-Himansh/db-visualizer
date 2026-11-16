@@ -173,7 +173,11 @@ CONNECTOR_CLASSES = {
 # Windows Credential Manager, Secret Service); 'file' keeps secret.key beside the data. An explicit data
 # directory means a portable or test setup, so it defaults to 'file' and never touches the user's keychain.
 KEY_STORE = os.environ.get('DBV_KEY_STORE') or ('file' if os.environ.get('DBV_DATA_DIR') else 'keychain')
-KEY_SERVICE = os.environ.get('DBV_KEYRING_SERVICE', STORAGE_NAME)
+# The keychain entry is named for the app, which is what the macOS prompt shows ("...stored in Cairn"). Before the rename it was STORAGE_NAME
+# ("DB Visualizer"): a key found only under that name is COPIED to the new one (never moved or deleted, so an older Cairn on the same
+# Mac keeps working) and never replaced by a new key. An explicit DBV_KEYRING_SERVICE (tests, portable setups) is used as given, no legacy lookup.
+KEY_SERVICE = os.environ.get('DBV_KEYRING_SERVICE', APP_NAME)
+LEGACY_KEY_SERVICE = STORAGE_NAME if KEY_SERVICE == APP_NAME else None
 KEY_ACCOUNT = 'connection-encryption-key'
 _key_cache: Optional[bytes] = None
 
@@ -210,6 +214,18 @@ def _write_key_file(key: bytes):
         f.write(key)
 
 
+def _copy_key_to_new_name(store, stored: str):
+    """Keep the key found under the old keychain name also under the new one. The old item stays, and the key in use does not change
+    whether or not the copy works (a failed copy is tried again next launch)."""
+    try:
+        store.set_password(KEY_SERVICE, KEY_ACCOUNT, stored)
+        if store.get_password(KEY_SERVICE, KEY_ACCOUNT) != stored:
+            raise RuntimeError('the keychain did not return the copied key')
+        logger.info('Copied the encryption key to the keychain entry named %s', KEY_SERVICE)
+    except Exception as e:
+        logger.warning('Could not copy the key to the keychain entry named %s (%s); still using the old entry', KEY_SERVICE, e)
+
+
 def load_key() -> bytes:
     """The Fernet key for saved passwords.
 
@@ -227,8 +243,12 @@ def load_key() -> bytes:
     store = _os_keyring()
     key = None
     if store:
+        from_legacy = False
         try:
             stored = store.get_password(KEY_SERVICE, KEY_ACCOUNT)
+            if not stored and LEGACY_KEY_SERVICE:
+                stored = store.get_password(LEGACY_KEY_SERVICE, KEY_ACCOUNT)
+                from_legacy = bool(stored)
         except Exception as e:
             if file_key is None:
                 logger.warning('The system keychain would not give up the encryption key (%s)', e)
@@ -244,6 +264,8 @@ def load_key() -> bytes:
                 key = stored.encode()
                 if file_key and file_key != key:
                     logger.warning('secret.key differs from the key in the keychain; using the keychain')
+                if from_legacy:
+                    _copy_key_to_new_name(store, stored)
             else:
                 # First run with the keychain: adopt the existing file key (migration), or make a new one
                 candidate = file_key or Fernet.generate_key()

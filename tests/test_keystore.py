@@ -173,11 +173,12 @@ def test_internal_ciphertext_field_never_reaches_the_browser(client, monkeypatch
 
 
 def test_the_names_that_locate_saved_connections_and_passwords_survive_the_rebrand(monkeypatch):
-    """The app is called Cairn, but the data folder and keychain entry keep the old name: renaming them would hide every
-    existing user's connections and make their saved passwords unreadable."""
+    """The app is called Cairn and its keychain entry now is too, but the data folder keeps the old name (renaming it would hide every
+    existing user's connections), and the old keychain name is still READ, so saved passwords stay readable."""
     assert db.APP_NAME == 'Cairn'
     assert db.STORAGE_NAME == 'DB Visualizer'
-    assert db.KEY_SERVICE == 'DB Visualizer'
+    assert db.KEY_SERVICE == 'Cairn'
+    assert db.LEGACY_KEY_SERVICE == 'DB Visualizer'
     monkeypatch.delenv('DBV_DATA_DIR', raising=False)                           # the real, per-user location
     assert db._data_dir().name == 'DB Visualizer'
 
@@ -252,3 +253,70 @@ def test_a_working_keychain_is_reported_available_and_asked_once(client, monkeyp
         assert client.post('/api/connections', json={'name': name, 'type': 'mysql', 'password': 'x'}).get_json()['success']
     client.get('/api/connections')
     assert good.gets == 1                                                  # asked once, then remembered
+
+
+# ---- the keychain entry is named Cairn now; a key saved under the old name is copied, never lost or replaced ------------------------
+
+def old_name(kc, key):
+    kc.items[(db.LEGACY_KEY_SERVICE, db.KEY_ACCOUNT)] = key
+
+
+def test_a_key_under_the_old_name_is_used_and_copied_to_the_new_name(monkeypatch):
+    kc = FakeKeychain()
+    key = Fernet.generate_key().decode()
+    old_name(kc, key)
+    use(monkeypatch, kc)
+    token = Fernet(key.encode()).encrypt(b'hunter2').decode()          # a password saved by an earlier version
+    assert db.load_key() == key.encode()
+    assert db.decrypt_password(token) == 'hunter2'
+    assert stored(kc) == key                                          # now also under the new name
+    assert kc.items[(db.LEGACY_KEY_SERVICE, db.KEY_ACCOUNT)] == key    # and the old item is left alone
+    assert not db.KEY_FILE.exists()
+
+
+def test_after_the_copy_the_old_name_is_not_asked_again(monkeypatch):
+    kc = FakeKeychain()
+    old_name(kc, Fernet.generate_key().decode())
+    use(monkeypatch, kc)
+    db.load_key()
+    kc.gets = 0
+    monkeypatch.setattr(db, '_key_cache', None)                        # a later launch
+    db.load_key()
+    assert kc.gets == 1 and stored(kc)
+
+
+def test_a_failed_copy_still_uses_the_old_key_and_never_invents_one(monkeypatch):
+    kc = FakeKeychain(fail_set=True)
+    key = Fernet.generate_key().decode()
+    old_name(kc, key)
+    use(monkeypatch, kc)
+    assert db.load_key() == key.encode()
+    assert not db.KEY_FILE.exists()                                    # no new key, no file: the existing key is simply used
+    assert kc.items[(db.LEGACY_KEY_SERVICE, db.KEY_ACCOUNT)] == key
+
+
+def test_a_denied_keychain_with_only_the_old_name_still_asks_once_and_stops(monkeypatch):
+    kc = FakeKeychain(fail_get=True)
+    old_name(kc, Fernet.generate_key().decode())
+    use(monkeypatch, kc)
+    with pytest.raises(db.KeychainUnavailable):
+        db.load_key()
+    with pytest.raises(db.KeychainUnavailable):
+        db.load_key()
+    assert kc.gets == 1
+
+
+def test_the_new_name_wins_when_both_exist(monkeypatch):
+    kc = FakeKeychain(stored=Fernet.generate_key().decode())
+    old_name(kc, Fernet.generate_key().decode())
+    use(monkeypatch, kc)
+    assert db.load_key() == stored(kc).encode() and kc.gets == 1
+
+
+def test_an_explicit_service_name_gets_no_legacy_lookup():
+    """Tests and portable setups name their own entry; they must not read (or copy from) the real 'DB Visualizer' item."""
+    import importlib, os, sys
+    code = "import db; print(db.KEY_SERVICE, db.LEGACY_KEY_SERVICE)"
+    out = __import__('subprocess').run([sys.executable, '-c', code], capture_output=True, text=True, cwd=os.path.dirname(db.__file__),
+                                       env={**os.environ, 'DBV_KEYRING_SERVICE': 'my-test-entry'}).stdout.strip()
+    assert out == 'my-test-entry None'
