@@ -62,6 +62,15 @@ if [ "${DESKTOP_GPU:-0}" = "1" ]; then
     python3 -m pip install --user -q "PySide6-Essentials~=6.12" 2>&1 | tail -1
     QT_QPA_PLATFORM=xcb python3 "$ROOT/packaging/qt_gl_control.py" 2>&1 | sed 's/^/  /' | cut -c1-200 || true
     echo "::endgroup::"
+    echo "::group::Control: can a plain Qt WebEngine program (no Cairn, no PyInstaller) show a page on this desktop?"
+    sudo apt-get install -y -qq --no-install-recommends libnss3 libnspr4 libasound2t64 libxcomposite1 libxdamage1 libxrandr2 libxtst6 libxshmfence1 \
+        libxfixes3 libxkbfile1 libegl1 libgl1 >/dev/null
+    python3 -m pip install --user -q "PySide6-Addons~=6.12" "PySide6-WebEngine~=6.12" 2>&1 | tail -1
+    echo "  -- with the hardware path (what DBV_GPU=1 gives the app)"
+    QT_QPA_PLATFORM=xcb QTWEBENGINE_CHROMIUM_FLAGS="--no-sandbox" timeout -s KILL 60 python3 "$ROOT/packaging/qt_webengine_control.py" 2>&1 | sed 's/^/     /' | cut -c1-200 || true
+    echo "  -- with the app's software defaults (what everyone gets)"
+    QT_QPA_PLATFORM=xcb QTWEBENGINE_CHROMIUM_FLAGS="--no-sandbox --disable-gpu" QT_QUICK_BACKEND=software QT_XCB_GL_INTEGRATION=none timeout -s KILL 60 python3 "$ROOT/packaging/qt_webengine_control.py" 2>&1 | sed 's/^/     /' | cut -c1-200 || true
+    echo "::endgroup::"
 fi
 dbus-run-session -- startxfce4 > xfce.log 2>&1 &
 sleep 12                                     # the panel and window manager come up
