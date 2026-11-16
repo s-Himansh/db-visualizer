@@ -1,6 +1,8 @@
 """The bundled typefaces really load and land on the right text, with no request leaving the app."""
 import pytest
 
+from conftest import first_family
+
 pytestmark = pytest.mark.e2e
 
 
@@ -10,16 +12,16 @@ def test_the_three_typefaces_load_and_apply(page):
     assert page.evaluate("document.fonts.load('700 24px \"Bricolage Grotesque\"').then(f => f.length > 0)")
     assert page.evaluate("document.fonts.load('400 13px \"Geist Mono\"').then(f => f.length > 0)")
     family = lambda sel: page.evaluate("s => getComputedStyle(document.querySelector(s)).fontFamily", sel)
-    assert family('body').startswith('"Instrument Sans"')
-    assert family('.sidebar-header h2').startswith('"Bricolage Grotesque"')
-    assert family('#welcome h2').startswith('"Bricolage Grotesque"')
+    assert first_family(family('body')) == 'Instrument Sans'
+    assert first_family(family('.sidebar-header h2')) == 'Bricolage Grotesque'
+    assert first_family(family('#welcome h2')) == 'Bricolage Grotesque'
 
 
 def test_grid_numbers_are_in_the_monospace_face(connected):
     connected.locator('#tables-content .tree-item').filter(has=connected.locator('.tree-label:text-is("customers")')).click()
     connected.wait_for_selector('.tab-content.active .data-table tbody tr')
     connected.wait_for_function("document.fonts.load('400 13px \"Geist Mono\"').then(f => f.length > 0)")
-    assert connected.evaluate("getComputedStyle(document.querySelector('.tab-content.active .data-table td.cell-num')).fontFamily").startswith('"Geist Mono"')
+    assert first_family(connected.evaluate("getComputedStyle(document.querySelector('.tab-content.active .data-table td.cell-num')).fontFamily")) == 'Geist Mono'
 
 
 def test_nothing_is_requested_from_outside_the_app(browser, server):

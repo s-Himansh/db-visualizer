@@ -1,6 +1,8 @@
 """The data grid fills the area and reads calmly: a gutter of row numbers, a quiet header, text in the interface face."""
 import pytest
 
+from conftest import first_family
+
 pytestmark = pytest.mark.e2e
 
 
@@ -58,14 +60,14 @@ def test_the_number_becomes_a_checkbox_on_hover_and_stays_when_ticked(connected)
 def test_text_is_in_the_interface_face_and_numbers_in_the_monospace(connected):
     open_table(connected, 'orders')
     face = lambda sel: connected.evaluate("s => getComputedStyle(document.querySelector(s)).fontFamily", sel)
-    assert face('.tab-content.active td[data-column=status]').startswith('"Instrument Sans"')
-    assert face('.tab-content.active td.cell-num').startswith('"Geist Mono"')
+    assert first_family(face('.tab-content.active td[data-column=status]')) == 'Instrument Sans'
+    assert first_family(face('.tab-content.active td.cell-num')) == 'Geist Mono'
 
 
 def test_the_header_is_a_quiet_line_and_a_hovered_row_wears_the_accent_bar(connected):
     open_table(connected, 'customers')
     head = connected.evaluate("getComputedStyle(document.querySelector('.tab-content.active .data-table thead th:nth-child(3)')).fontFamily")
-    assert head.startswith('"Instrument Sans"')
+    assert first_family(head) == 'Instrument Sans'
     connected.hover('.tab-content.active .data-table tbody tr:nth-child(3)')
     connected.wait_for_function("getComputedStyle(document.querySelector('.tab-content.active .data-table tbody tr:nth-child(3) td:first-child')).boxShadow.includes('inset')"
                                 " && !getComputedStyle(document.querySelector('.tab-content.active .data-table tbody tr:nth-child(3) td:first-child')).boxShadow.startsWith('rgba(0, 0, 0, 0)')")
