@@ -66,6 +66,7 @@ def open_page(browser, url):
     ctx = browser.new_context(viewport={'width': 1300, 'height': 800})
     pg = ctx.new_page()
     pg.set_default_timeout(8000)
+    pg.set_default_navigation_timeout(30000)    # loading is a different wait: a slow CI runner can pass 8s (as conftest.py does for its own page)
     pg.goto(url)
     return pg
 

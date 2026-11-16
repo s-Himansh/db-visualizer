@@ -107,6 +107,13 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path "dist\Cairn" -DestinationPath "${{ matrix.file }}.zip"
 
+      # The bundle must not carry its own C++ runtime. The copy PyInstaller picks up is Ubuntu 22.04's (GLIBCXX 3.4.30) and, being searched first,
+      # shadows the system's newer one that a modern Mesa needs: the app then aborted with "Could not initialize GLX" wherever DBV_GPU=1 asked for
+      # hardware drawing. Found by running the packaged app, the same app from source, and a plain Qt WebEngine program on one desktop, then
+      # deleting just these two libraries from the bundle. Every Linux system has them, and a newer system copy runs older programs.
+      - name: Use the system's C++ runtime, not a copy of ours (Linux)
+        if: runner.os == 'Linux'
+        run: find dist/Cairn \( -name 'libstdc++.so*' -o -name 'libgcc_s.so*' \) -print -delete
       - name: List what the app asks of the desktop, and fail if it is more than expected (Linux)
         if: runner.os == 'Linux'
         run: python3 packaging/host-libraries.py dist/Cairn
