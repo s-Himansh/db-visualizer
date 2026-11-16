@@ -93,6 +93,28 @@ if [ "${DESKTOP_GPU_BISECT:-0}" = "1" ]; then
     exit 0
 fi
 
+if [ "${DESKTOP_GPU_VARIANTS:-0}" = "1" ]; then
+    # The failure ("Could not initialize GLX ... qglx_findConfig ... version 2.0") is Qt WebEngine asking this virtual X server for an OpenGL ES 2.0
+    # context through GLX. Try the app with settings that ask differently, and see which start.
+    echo "::group::Which GL settings start the app?"
+    run_variant() {  # run_variant <name> [VAR=value ...]
+        local name=$1; shift
+        rm -rf "$OUT/data-variant"
+        ( export DBV_GPU=1 DBV_DATA_DIR="$OUT/data-variant"; env "$@" ./app/Cairn/Cairn > variant.log 2>&1 & pid=$!
+          sleep 14
+          if kill -0 $pid 2>/dev/null; then echo "  RESULT [$name]: the app stayed running"; kill $pid; sleep 1; kill -9 $pid 2>/dev/null
+          else echo "  RESULT [$name]: it exited ($(grep -m1 -oE 'Could not initialize GLX|cannot open shared object file[^,]*|undefined symbol[^ ]*|Failed to create [A-Za-z ]*' variant.log || echo see log))"; fi ) || true
+    }
+    run_variant "as it ships with DBV_GPU=1"
+    run_variant "Qt GL through EGL instead of GLX" QT_XCB_GL_INTEGRATION=xcb_egl
+    run_variant "force desktop OpenGL" QT_OPENGL=desktop
+    run_variant "Chromium: --use-gl=egl" "QTWEBENGINE_CHROMIUM_FLAGS=--no-sandbox --use-gl=egl"
+    run_variant "Chromium: ANGLE over desktop GL" "QTWEBENGINE_CHROMIUM_FLAGS=--no-sandbox --use-gl=angle --use-angle=gl"
+    run_variant "EGL for Qt and for Chromium" QT_XCB_GL_INTEGRATION=xcb_egl "QTWEBENGINE_CHROMIUM_FLAGS=--no-sandbox --use-gl=egl"
+    echo "::endgroup::"
+    exit 0
+fi
+
 echo "::group::Start the app the way a person would"
 # QTWEBENGINE_REMOTE_DEBUGGING only lets the test drive the window afterwards; it changes no rendering setting.
 DBV_DATA_DIR="$OUT/data" QTWEBENGINE_REMOTE_DEBUGGING=9222 ./app/Cairn/Cairn > app-stdout.log 2>&1 &

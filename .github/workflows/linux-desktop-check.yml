@@ -25,6 +25,10 @@ on:
         description: With gpu, find which group of bundled libraries breaks the hardware drawing path, by removing groups cumulatively and trying the app after each
         type: boolean
         default: false
+      variants:
+        description: With gpu, try the app under several GL settings (EGL instead of GLX, forced desktop GL, Chromium GL flags) and report which start
+        type: boolean
+        default: false
       without_bundled_gl:
         description: With gpu, delete the graphics dispatch libraries the app bundles first, so it must use the system's (tests whether the bundled ones are the cause of a GLX failure)
         type: boolean
@@ -47,6 +51,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DESKTOP_GPU: ${{ inputs.gpu && '1' || '0' }}
           DESKTOP_GPU_BISECT: ${{ inputs.bisect && '1' || '0' }}
+          DESKTOP_GPU_VARIANTS: ${{ inputs.variants && '1' || '0' }}
           DESKTOP_WITHOUT_BUNDLED_GL: ${{ inputs.without_bundled_gl && '1' || '0' }}
         run: bash packaging/linux-desktop-check.sh "${{ inputs.tag }}"
       - name: Keep the screenshots and logs
