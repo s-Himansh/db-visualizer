@@ -146,6 +146,12 @@ if [ "${DESKTOP_GPU_VARIANTS:-0}" = "1" ]; then
     exit 0
 fi
 
+# The controls above start apps of their own; one was left open last time, and the test then found ITS window instead of the packaged app's.
+pkill -f "$OUT/venv/bin/python" 2>/dev/null || true
+pkill -f QtWebEngineProcess 2>/dev/null || true
+sleep 3
+echo "windows named Cairn before the real run: $(xdotool search --onlyvisible --name '^Cairn$' 2>/dev/null | wc -l | tr -d ' ') (must be 0)"
+
 echo "::group::Start the app the way a person would"
 # QTWEBENGINE_REMOTE_DEBUGGING only lets the test drive the window afterwards; it changes no rendering setting.
 DBV_DATA_DIR="$OUT/data" QTWEBENGINE_REMOTE_DEBUGGING=9222 ./app/Cairn/Cairn > app-stdout.log 2>&1 &
@@ -158,7 +164,8 @@ for i in $(seq 1 60); do
     sleep 1
 done
 [ -n "$win" ] || { echo "no window named Cairn appeared in 60 seconds"; tail -20 app-stdout.log; exit 1; }
-echo "window found: id $win after ~${i}s"
+echo "window found: id $win after ~${i}s;  windows named Cairn now: $(xdotool search --onlyvisible --name '^Cairn$' 2>/dev/null | wc -l | tr -d ' ') (must be 1)"
+echo "Chromium's GPU process, as this app started it:"; pgrep -af 'type=gpu-process' | sed 's/.*QtWebEngineProcess/  QtWebEngineProcess/' | cut -c1-260 | head -2 || true
 xdotool getwindowgeometry "$win" | sed 's/^ *//'
 echo "window title: $(xdotool getwindowname "$win")"
 sleep 6
